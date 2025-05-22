@@ -25,48 +25,41 @@ class DeviceBuffer;
 //==============================================================================
 
 template<typename T, uint Dim, bool unified = false>
-class HostBuffer : public VirtualBuffer<T,Dim,unified> {
+class HostPinnedBuffer : public VirtualBuffer<T,Dim,unified> {
 public:
   using Base = VirtualBuffer<T,Dim,unified>;
 
   // ctor/dtor
-  HostBuffer(uint n1, uint n2 = 1,uint n3 = 1, uint n4 = 1) : Base(n1,n2,n3,n4)
+  HostPinnedBuffer(uint n1, uint n2 = 1,uint n3 = 1, uint n4 = 1) : Base(n1,n2,n3,n4)
   {
     this->allocate(this->total_);
   }
-  ~HostBuffer() override{
+  ~HostPinnedBuffer() override{
     this->deallocate();
   };
-
-  // host <-> host
-  inline void copyFrom(const HostBuffer& src) {
-    if (&src == this) return;
-    if (src.size() != this->size())
-      throw std::runtime_error("HostBuffer::copyFrom size mismatch");
-    std::memcpy(this->getDataPtr(), src.getDataPtr(), this->size()*sizeof(T));        
-  }
-
-  inline void copyTo(HostBuffer& dst) const {
-    dst.copyFrom(*this);
-  }
 
   // host <-> host
   inline void copyFrom(const HostPinnedBuffer& src) {
     if (&src == this) return;
     if (src.size() != this->size())
       throw std::runtime_error("HostBuffer::copyFrom size mismatch");
-    std::memcpy(this->getDataPtr(), src.getDataPtr(), this->size()*sizeof(T));        
+#if CUDA_MANAGED
+        CUDA_CHECK(cudaMemcpy(this->getDataPtr(), src.getDataPtr(), this->size()*sizeof(T), cudaMemcpyDefault); );
+#else
+        std::memcpy(this->getDataPtr(), src.getDataPtr(), this->size()*sizeof(T));        
+#endif
   }
 
   inline void copyTo(HostPinnedBuffer& dst) const {
-    if (&dst == this) return;
-    if (dst.size() != this->size())
-      throw std::runtime_error("HostBuffer::copyFrom size mismatch");
-    std::memcpy(dst.getDataPtr(),this->getDataPtr(), this->size()*sizeof(T));
+    dst.copyFrom(*this);
   }
 
   inline void selfCopy(T* newPtr, T* oldPtr, uint oldSize){
-      std::memcpy(newPtr, oldPtr, oldSize * sizeof(T));        
+#if CUDA_MANAGED
+        CUDA_CHECK(cudaMemcpy(newPtr, oldPtr, oldSize * sizeof(T), cudaMemcpyDefault); );
+#else
+        std::memcpy(newPtr, oldPtr, oldSize * sizeof(T));        
+#endif
   }
 
   // device -> host
@@ -102,12 +95,25 @@ public:
 protected:
   inline void allocate(int n1, uint n2 = 1, uint n3 = 1, uint n4 = 1) override {
     if(this->total_ > 0){
-      this->data_ = static_cast<T*>(::operator new(this->total_ * sizeof(T),std::align_val_t(4096)));
+      if constexpr (unified) {
+#if CUDA_MANAGED
+        std::cout<< "Allocate host buffer cuda managed"<<std::endl;
+        CUDA_CHECK(cudaMallocManaged(&this->data_, this->total_ * sizeof(T)) );
+#else
+        this->data_ = static_cast<T*>(::operator new(this->total_ * sizeof(T),std::align_val_t(4096)));
+#endif
+      } else {CUDA_CHECK(cudaHostAlloc(&this->data_,this->total_*sizeof(T),cudaHostAllocDefault));}
     }
   }
 
   inline void deallocatePtr(T* ptr) override {
+    if constexpr (unified) {
+#if CUDA_MANAGED
+        cudaFree(ptr);
+#else
         ::operator delete(ptr, std::align_val_t(4096));
-  }
+#endif
+      } else {cudaFreeHost(ptr);}
+  }  
   
 };
