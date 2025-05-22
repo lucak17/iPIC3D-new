@@ -64,18 +64,12 @@ public:
     __host__ __device__ __forceinline__ const T* getHostDataPtr() const noexcept { return this->hostBuf_->getDataPtr(); }
 
     __host__ __device__ __forceinline__ T* getDeviceDataPtr() noexcept { 
-        if constexpr (unified){
-            return this->hostBuf_->getDataPtr();
-        } else{
-            return this->deviceBuf_->getDataPtr();
-        }
+        if constexpr (unified){return this->hostBuf_->getDataPtr();} 
+        else{return this->deviceBuf_->getDataPtr();}
     }
     __host__ __device__ __forceinline__ const T* getDeviceDataPtr() const noexcept { 
-        if constexpr (unified){
-            return this->hostBuf_->getDataPtr();
-        } else{
-            return this->deviceBuf_->getDataPtr();
-        }
+        if constexpr (unified){return this->hostBuf_->getDataPtr();} 
+        else{return this->deviceBuf_->getDataPtr();}
     }
 
 protected:

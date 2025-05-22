@@ -32,7 +32,7 @@ public:
   // ctor/dtor
   HostBuffer(uint n1, uint n2 = 1,uint n3 = 1, uint n4 = 1) : Base(n1,n2,n3,n4)
   {
-    this->allocate(this->total_);
+    this->allocate(n1,n2,n3,n4);
   }
   ~HostBuffer() override{
     this->deallocate();

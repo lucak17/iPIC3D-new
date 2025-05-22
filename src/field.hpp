@@ -7,8 +7,7 @@
 template<typename T, uint Dim,bool unified=false>
 class Field {
 public:
-  Field(uint n1,uint n2=1,
-        uint n3=1,uint n4=1)
+  Field(uint n1, uint n2=1, uint n3=1, uint n4=1)
   {
     mirrorBuf_ = new MirrorHostDeviceBuffer<T,Dim,unified>(n1,n2,n3,n4);
   }
