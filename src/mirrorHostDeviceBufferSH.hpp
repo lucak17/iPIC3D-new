@@ -1,6 +1,6 @@
 #pragma once
 #include "virtualBuffer.hpp"
-#include "hostBufferSH.hpp"
+#include "hostPinnedBufferSH.hpp"
 #include "deviceBufferSH.hpp"
 #include <cuda_runtime.h>
 #include <new>
@@ -46,10 +46,10 @@ public:
         deviceBuf_->expandBuffer(n1,n2,n3,n4,stream);
   }
 
-    inline HostBuffer<T,Dim,unified>* getHostBufferPtr(){
+    inline HostPinnedBuffer<T,Dim,unified>* getHostBufferPtr(){
         return this->hostBuf_;
     }
-    inline const HostBuffer<T,Dim,unified>* getHostBufferPtr() const noexcept {
+    inline const HostPinnedBuffer<T,Dim,unified>* getHostBufferPtr() const noexcept {
         return this->hostBuf_;
     }
 
@@ -76,12 +76,12 @@ protected:
     void allocate(const uint n1, const uint n2=1, const uint n3=1, const uint n4=1) override {
         if(this->total_ > 0){
             if constexpr (unified){
-                hostBuf_ = new HostBuffer<T, Dim, unified>(n1,n2,n3,n4);
+                hostBuf_ = new HostPinnedBuffer<T, Dim, unified>(n1,n2,n3,n4);
                 deviceBuf_ = new DeviceBuffer<T, Dim, unified>(n1,n2,n3,n4);
                 deviceBuf_->allocateForUnifiedMemory(this->getHostDataPtr());
             }
             else{
-                hostBuf_ = new HostBuffer<T, Dim, unified>(n1,n2,n3,n4);
+                hostBuf_ = new HostPinnedBuffer<T, Dim, unified>(n1,n2,n3,n4);
                 deviceBuf_ = new DeviceBuffer<T, Dim, unified>(n1,n2,n3,n4);
             }
         }
@@ -93,6 +93,6 @@ protected:
     void deallocatePtr(T* ptr) override {}
 private:
 
-  HostBuffer<T,Dim,unified>* hostBuf_ = nullptr;
+  HostPinnedBuffer<T,Dim,unified>* hostBuf_ = nullptr;
   DeviceBuffer<T,Dim,unified>* deviceBuf_ = nullptr;
 };
