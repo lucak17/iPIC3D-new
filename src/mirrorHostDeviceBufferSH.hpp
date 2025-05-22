@@ -38,6 +38,18 @@ public:
         }
     }
 
+    void selfCopy(T* newPtr, T* oldPtr, uint oldSize) override {}
+
+    void expandBuffer(uint n1, uint n2=1, uint n3=1, uint n4=1, cudaStream_t stream = 0 ) override {
+        this->n1_= n1;
+        this->n2_ = n2;
+        this->n3_ = n3;
+        this->n4_ = n4;
+        this->total_ = n1*n2*n3*n4;
+        hostBuf_->expandBuffer(n1,n2,n3,n4,stream);
+        deviceBuf_->expandBuffer(n1,n2,n3,n4,stream);
+  }
+
     inline HostBuffer<T,Dim,unified>* getHostBufferPtr(){
     return this->hostBuf_;
     }
@@ -88,6 +100,7 @@ protected:
         if (this->hostBuf_ != nullptr){ delete hostBuf_; }
         if (this->deviceBuf_ != nullptr){ delete deviceBuf_; }
     }
+    void deallocatePtr(T* ptr) override {}
 private:
 
   HostBuffer<T,Dim,unified>* hostBuf_ = nullptr;

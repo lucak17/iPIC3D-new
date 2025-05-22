@@ -12,7 +12,7 @@
       throw std::runtime_error(cudaGetErrorString(err));  \
   } while (0)
 
-#define CUDA_MANAGED 1
+#define CUDA_MANAGED 0
 
 // Abstract base for 1D–4D flat storage + indexing
 template<typename T, uint Dim, bool unified>
@@ -20,24 +20,27 @@ class VirtualBuffer {
   static_assert(Dim >= 1 && Dim <= 4, "Dim must be between 1 and 4");
 
 public:
-  VirtualBuffer(uint n1,
-                uint n2 = 1,
-                uint n3 = 1,
-                uint n4 = 1)
-    : n1_(n1), n2_(n2), n3_(n3), n4_(n4),
-      total_(n1_*n2_*n3_*n4_), data_(nullptr)
+  VirtualBuffer(uint n1, uint n2 = 1, uint n3 = 1, uint n4 = 1)
+    : n1_(n1), n2_(n2), n3_(n3), n4_(n4), total_(n1_*n2_*n3_*n4_), data_(nullptr)
   {
   }
 
-  virtual ~VirtualBuffer() {
-  }
+  virtual ~VirtualBuffer() {}
 
-  /*
-  virtual void copyFrom(const VirtualBuffer<T,Dim,unified>& src) = 0;
-  virtual void copyTo(VirtualBuffer<T,Dim,unified>& dst) const = 0;
-  virtual void copyFrom(const VirtualBuffer<T,Dim,unified>& src, cudaStream_t stream = 0) = 0;
-  virtual void copyTo(VirtualBuffer<T,Dim,unified>& dst, cudaStream_t stream = 0) const = 0;
-  */
+  virtual void selfCopy(T* newPtr, T* oldPtr, uint oldSize) = 0;
+
+  virtual void expandBuffer(uint n1, uint n2=1, uint n3=1, uint n4=1, cudaStream_t stream = 0 ){
+    auto oldPtr = this->data_;
+    auto oldSize = this->size();
+    this->n1_= n1;
+    this->n2_ = n2;
+    this->n3_ = n3;
+    this->n4_ = n4;
+    this->total_ = n1*n2*n3*n4;
+    this->allocate(n1,n2,n3,n4);
+    this->selfCopy(this->data_,oldPtr, oldSize);
+    this->deallocatePtr(oldPtr);
+  }
 
   void setPtr(T* ptr){
     this->data_ = ptr;
@@ -97,7 +100,12 @@ public:
 
 protected:
   virtual void allocate(int n1, uint n2 = 1, uint n3 = 1, uint n4 = 1) = 0;
-  virtual void deallocate() = 0;
+  virtual void deallocatePtr(T* ptr) = 0;
+  inline virtual void deallocate(){
+    if(this->data_ != nullptr && !this->isMirroringAnotherBuffer){
+      this->deallocatePtr(this->data_);
+    }
+  }
   bool isMirroringAnotherBuffer = false;
   uint n1_, n2_, n3_, n4_, total_;
   T*           data_ = nullptr;

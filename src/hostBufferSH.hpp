@@ -30,7 +30,8 @@ public:
   using Base = VirtualBuffer<T,Dim,unified>;
 
   // ctor/dtor
-  HostBuffer(uint n1, uint n2 = 1,uint n3 = 1, uint n4 = 1) : Base(n1,n2,n3,n4){
+  HostBuffer(uint n1, uint n2 = 1,uint n3 = 1, uint n4 = 1) : Base(n1,n2,n3,n4)
+  {
     this->allocate(this->total_);
   }
   ~HostBuffer() override{
@@ -38,19 +39,31 @@ public:
   };
 
   // host <-> host
-  void copyFrom(const HostBuffer& src) {
+  inline void copyFrom(const HostBuffer& src) {
     if (&src == this) return;
     if (src.size() != this->size())
       throw std::runtime_error("HostBuffer::copyFrom size mismatch");
-    std::memcpy(this->data(), src.data(), this->size()*sizeof(T));
+#if CUDA_MANAGED
+        CUDA_CHECK(cudaMemcpy(this->getDataPtr(), src.getDataPtr(), this->size()*sizeof(T), cudaMemcpyDefault); );
+#else
+        std::memcpy(this->getDataPtr(), src.getDataPtr(), this->size()*sizeof(T));        
+#endif
   }
 
-  void copyTo(HostBuffer& dst) const {
+  inline void copyTo(HostBuffer& dst) const {
     dst.copyFrom(*this);
   }
 
+  inline void selfCopy(T* newPtr, T* oldPtr, uint oldSize){
+#if CUDA_MANAGED
+        CUDA_CHECK(cudaMemcpy(newPtr, oldPtr, oldSize * sizeof(T), cudaMemcpyDefault); );
+#else
+        std::memcpy(newPtr, oldPtr, oldSize * sizeof(T));        
+#endif
+  }
+
   // device -> host
-  void copyFrom(const DeviceBuffer<T,Dim,unified>& src, cudaStream_t stream = 0)
+  inline void copyFrom(const DeviceBuffer<T,Dim,unified>& src, cudaStream_t stream = 0)
   {
     if constexpr (unified) {
 #if CUDA_MANAGED
@@ -65,7 +78,7 @@ public:
   }
 
   // host -> device
-  void copyTo(DeviceBuffer<T,Dim,unified>& dst, cudaStream_t stream = 0) const
+  inline void copyTo(DeviceBuffer<T,Dim,unified>& dst, cudaStream_t stream = 0) const
   {
     if constexpr (unified) {
 #if CUDA_MANAGED
@@ -80,7 +93,7 @@ public:
   }
 
 protected:
-  void allocate(int n1, uint n2 = 1, uint n3 = 1, uint n4 = 1) override {
+  inline void allocate(int n1, uint n2 = 1, uint n3 = 1, uint n4 = 1) override {
     if(this->total_ > 0){
       if constexpr (unified) {
 #if CUDA_MANAGED
@@ -93,15 +106,14 @@ protected:
     }
   }
 
-  void deallocate() override {
-    if (this->data_ != nullptr){
-      if constexpr (unified) {
+  inline void deallocatePtr(T* ptr) override {
+    if constexpr (unified) {
 #if CUDA_MANAGED
-            cudaFree(this->data_);
+        cudaFree(ptr);
 #else
-        ::operator delete(this->data_, std::align_val_t(4096));
+        ::operator delete(ptr, std::align_val_t(4096));
 #endif
-      } else {cudaFreeHost(this->data_);}
-    }
-  }
+      } else {cudaFreeHost(ptr);}
+  }  
+  
 };

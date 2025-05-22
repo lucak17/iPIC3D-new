@@ -21,11 +21,7 @@ public:
   using Base = VirtualBuffer<T,Dim,unified>;
 
   // ctor / dtor
-  DeviceBuffer(uint n1,
-               uint n2 = 1,
-               uint n3 = 1,
-               uint n4 = 1)
-    : Base(n1,n2,n3,n4)
+  DeviceBuffer(uint n1, uint n2 = 1, uint n3 = 1, uint n4 = 1) : Base(n1,n2,n3,n4)
   {
     this->allocate(n1,n2,n3,n4);
   }
@@ -35,7 +31,7 @@ public:
   }
 
   // device <-> device
-  void copyFrom(const DeviceBuffer& src) {
+  inline void copyFrom(const DeviceBuffer& src) {
     if (&src == this) return;
     if (src.size() != this->size())
       throw std::runtime_error("DeviceBuffer::copyFrom size mismatch");
@@ -50,12 +46,12 @@ public:
     }
   }
 
-  void copyTo(DeviceBuffer& dst) const {
+  inline void copyTo(DeviceBuffer& dst) const {
     dst.copyFrom(*this);
   }
 
   // host -> device
-  void copyFrom(const HostBuffer<T,Dim,unified>& src,cudaStream_t stream = 0)
+  inline void copyFrom(const HostBuffer<T,Dim,unified>& src,cudaStream_t stream = 0)
   {
     if constexpr (unified) {
 #if CUDA_MANAGED
@@ -70,8 +66,7 @@ public:
   }
 
   // device -> host
-  void copyTo(HostBuffer<T,Dim,unified>& dst,
-              cudaStream_t stream = 0) const
+  inline void copyTo(HostBuffer<T,Dim,unified>& dst, cudaStream_t stream = 0) const
   {
     if constexpr (unified) {
 #if CUDA_MANAGED
@@ -85,23 +80,29 @@ public:
     }
   }
 
-  void allocateForUnifiedMemory(T* ptr){
-    if(this->data_ != nullptr){
-        if constexpr (unified) {
+  inline void selfCopy(T* newPtr, T* oldPtr, uint oldSize){
+    if constexpr (unified) {
 #if CUDA_MANAGED
-            cudaFree(this->data_);
+        CUDA_CHECK(cudaMemcpy(newPtr, oldPtr, oldSize * sizeof(T), cudaMemcpyDefault); );
 #else
-        ::operator delete(this->data_, std::align_val_t(4096));
+        std::memcpy(newPtr, oldPtr, oldSize * sizeof(T));        
 #endif
-        }
-        this->isMirroringAnotherBuffer = true;
-        this->setPtr(ptr);
+    } else {
+      CUDA_CHECK(cudaMemcpy(newPtr, oldPtr, oldSize * sizeof(T),cudaMemcpyDeviceToDevice));
     }
+  }
+
+  inline void allocateForUnifiedMemory(T* ptr){
+    if(this->data_ != nullptr){
+        this->deallocatePtr(this->data_);
+    }
+    this->isMirroringAnotherBuffer = true;
+    this->setPtr(ptr);
   }
 
 protected:
   // allocation & deallocation
-  void allocate(int n1, uint n2 = 1, uint n3 = 1, uint n4 = 1) override {
+  inline void allocate(int n1, uint n2 = 1, uint n3 = 1, uint n4 = 1) override {
     if(this->total_ > 0){
         if constexpr (unified) {
 #if CUDA_MANAGED
@@ -113,15 +114,13 @@ protected:
     }
   }
 
-  void deallocate() override {
-    if(this->data_ != nullptr && !this->isMirroringAnotherBuffer){
-        if constexpr (unified) {
+  inline void deallocatePtr(T* ptr) override {
+    if constexpr (unified) {
 #if CUDA_MANAGED
-            cudaFree(this->data_);
+            cudaFree(ptr);
 #else
-        ::operator delete(this->data_, std::align_val_t(4096));
+        ::operator delete(ptr, std::align_val_t(4096));
 #endif
-        } else{ cudaFree(this->data_);}
-    }
+        } else{ cudaFree(ptr);}
   }
 };
