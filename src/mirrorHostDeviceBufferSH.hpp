@@ -40,18 +40,14 @@ public:
 
     void selfCopy(T* newPtr, T* oldPtr, uint oldSize) override {}
 
-    void expandBuffer(uint n1, uint n2=1, uint n3=1, uint n4=1, cudaStream_t stream = 0 ) override {
-        this->n1_= n1;
-        this->n2_ = n2;
-        this->n3_ = n3;
-        this->n4_ = n4;
-        this->total_ = n1*n2*n3*n4;
+    void expandBuffer(const uint n1, const uint n2=1, const uint n3=1, const uint n4=1, cudaStream_t stream = 0 ) override {
+        this->setExtents(n1,n2,n3,n4);
         hostBuf_->expandBuffer(n1,n2,n3,n4,stream);
         deviceBuf_->expandBuffer(n1,n2,n3,n4,stream);
   }
 
     inline HostBuffer<T,Dim,unified>* getHostBufferPtr(){
-    return this->hostBuf_;
+        return this->hostBuf_;
     }
     inline const HostBuffer<T,Dim,unified>* getHostBufferPtr() const noexcept {
         return this->hostBuf_;
@@ -64,17 +60,17 @@ public:
         return this->deviceBuf_;
     }
 
-    inline T*       getHostDataPtr()       noexcept { return this->hostBuf_->getDataPtr(); }
-    inline const T* getHostDataPtr() const noexcept { return this->hostBuf_->getDataPtr(); }
+    __host__ __device__ __forceinline__ T*       getHostDataPtr()       noexcept { return this->hostBuf_->getDataPtr(); }
+    __host__ __device__ __forceinline__ const T* getHostDataPtr() const noexcept { return this->hostBuf_->getDataPtr(); }
 
-    inline T* getDeviceDataPtr() noexcept { 
+    __host__ __device__ __forceinline__ T* getDeviceDataPtr() noexcept { 
         if constexpr (unified){
             return this->hostBuf_->getDataPtr();
         } else{
             return this->deviceBuf_->getDataPtr();
         }
     }
-    inline const T* getDeviceDataPtr() const noexcept { 
+    __host__ __device__ __forceinline__ const T* getDeviceDataPtr() const noexcept { 
         if constexpr (unified){
             return this->hostBuf_->getDataPtr();
         } else{
@@ -83,7 +79,7 @@ public:
     }
 
 protected:
-    void allocate(int n1, uint n2 = 1, uint n3 = 1, uint n4 = 1) override {
+    void allocate(const uint n1, const uint n2=1, const uint n3=1, const uint n4=1) override {
         if(this->total_ > 0){
             if constexpr (unified){
                 hostBuf_ = new HostBuffer<T, Dim, unified>(n1,n2,n3,n4);
