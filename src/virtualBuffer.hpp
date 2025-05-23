@@ -5,14 +5,16 @@
 #include <type_traits>
 
 
+#ifndef CUDA_CHECK
 #define CUDA_CHECK(call)                                  \
   do {                                                    \
     cudaError_t err = call;                               \
     if (err != cudaSuccess)                               \
       throw std::runtime_error(cudaGetErrorString(err));  \
   } while (0)
+#endif
 
-#define CUDA_MANAGED 0
+#define CUDA_MANAGED 1
 
 // Abstract base for 1D–4D flat storage + indexing
 template<typename T, uint Dim, bool unified>
@@ -21,14 +23,14 @@ class VirtualBuffer {
 
 public:
   VirtualBuffer(uint n1, uint n2 = 1, uint n3 = 1, uint n4 = 1)
-    : n1_(n1), n2_(n2), n3_(n3), n4_(n4), total_(n1_*n2_*n3_*n4_),
-    stride4_(1), stride3_(n4), stride2_(n3_*stride3_), stride1_(n2_*stride2_), data_(nullptr)
+    : n1_(n1), n2_(n2), n3_(n3), n4_(n4), total_(n1_*n2_*n3_*n4_), data_(nullptr)
   {
+    this->recalculateStrides();
   }
 
   virtual ~VirtualBuffer() {}
 
-  virtual void selfCopy(T* newPtr, T* oldPtr, uint oldSize) = 0;
+  virtual void selfTypeCopy(T* dstPtr, const T* srcPtr, const uint size) = 0;
 
   __host__ __device__ __forceinline__ void setExtents(const uint n1, const uint n2 = 1, const uint n3 = 1, const uint n4 = 1){
     this->n1_ = n1;
@@ -36,18 +38,15 @@ public:
     this->n3_ = n3;
     this->n4_ = n4;
     this->total_ = n1*n2*n3*n4;
-    this->stride4_ = 1;
-    this->stride3_ = n4;
-    this->stride2_ = n3_*this->stride3_;
-    this->stride1_ = n2_*this->stride2_;
+    this->recalculateStrides();
   }
 
   virtual void expandBuffer(uint n1, uint n2=1, uint n3=1, uint n4=1, cudaStream_t stream = 0 ){
-    auto oldPtr = this->data_;
-    auto oldSize = this->size();
+    T* oldPtr = this->data_;
+    uint oldSize = this->size();
     this->setExtents(n1,n2,n3,n4);
     this->allocate(n1,n2,n3,n4);
-    this->selfCopy(this->data_,oldPtr, oldSize);
+    this->selfTypeCopy(this->data_, oldPtr, oldSize);
     this->deallocatePtr(oldPtr);
   }
 
@@ -75,46 +74,52 @@ public:
   template<uint D = Dim>
   __host__ __device__ __forceinline__ std::enable_if_t<D==2, T&>
   operator()(const uint i, const uint j) noexcept {
-    return data_[i*stride1_+ j];
+    return data_[i + j*stride_j_];
   }
   template<uint D = Dim>
   __host__ __device__ __forceinline__ std::enable_if_t<D==2, const T&>
   operator()(const uint i, const uint j) const noexcept {
-    return data_[i*stride1_ + j];
+    return data_[i + j*stride_j_];
   }
 
   template<uint D = Dim>
   __host__ __device__ __forceinline__ std::enable_if_t<D==3, T&>
   operator()(const uint i, const uint j, const uint k) noexcept {
-    return data_[i*stride1_ + j*stride2_ + k];
+    return data_[i + j*stride_j_ + k*stride_k_];
   }
   template<uint D = Dim>
   __host__ __device__ __forceinline__ std::enable_if_t<D==3, const T&>
   operator()(const uint i, const uint j, const uint k) const noexcept {
-    return data_[i*stride1_ + j*stride2_ + k];
+    return data_[i + j*stride_j_ + k*stride_k_];
   }
 
   template<uint D = Dim>
   __host__ __device__ __forceinline__ std::enable_if_t<D==4, T&>
   operator()(const uint i, const uint j, const uint k, const uint l) noexcept {
-    return data_[i*stride1_ + j*stride2_ + k*stride3_ + l];
+    return data_[i + j*stride_j_ + k*stride_k_ + l*stride_l_];
   }
   template<uint D = Dim>
   __host__ __device__ __forceinline__ std::enable_if_t<D==4, const T&>
   operator()(const uint i, const uint j, const uint k, const uint l) const noexcept {
-    return data_[i*stride1_ + j*stride2_ + k*stride3_ + l];
+    return data_[i + j*stride_j_ + k*stride_k_ + l*stride_l_];
   }
 
 protected:
-  virtual void allocate(int n1, uint n2 = 1, uint n3 = 1, uint n4 = 1) = 0;
+  virtual void allocate(const uint n1, const uint n2 = 1, const uint n3 = 1, const uint n4 = 1) = 0;
   virtual void deallocatePtr(T* ptr) = 0;
   inline virtual void deallocate(){
     if(this->data_ != nullptr && !this->isMirroringAnotherBuffer){
       this->deallocatePtr(this->data_);
     }
   }
+  __host__ __device__ __forceinline__ void recalculateStrides() {
+    stride_i_ = 1;
+    stride_j_ = n1_;
+    stride_k_ = n1_ * n2_;
+    stride_l_ = n1_ * n2_ * n3_;
+  }
   bool isMirroringAnotherBuffer = false;
   uint n1_, n2_, n3_, n4_, total_;
-  uint stride4_, stride3_, stride2_, stride1_;
+  uint stride_i_, stride_j_, stride_k_, stride_l_;
   T*           data_ = nullptr;
 };

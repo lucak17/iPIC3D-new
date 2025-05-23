@@ -11,7 +11,7 @@ find_package(CUDAToolkit QUIET)
 
 # Build test executable
 add_executable(test_field
-  test.cpp
+  test.cu
 )
 
 # include your headers

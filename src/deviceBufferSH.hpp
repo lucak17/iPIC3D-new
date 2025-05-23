@@ -6,11 +6,6 @@
 #include <stdexcept>
 
 
-
-// forward‐declare HostBuffer so we can refer to it
-template<typename T, uint Dim, bool unified>
-class HostBuffer;
-
 //==============================================================================
 // DeviceBuffer: GPU global or unified‐aligned memory
 //==============================================================================
@@ -20,7 +15,6 @@ class DeviceBuffer : public VirtualBuffer<T,Dim,unified> {
 public:
   using Base = VirtualBuffer<T,Dim,unified>;
 
-  // ctor / dtor
   DeviceBuffer(uint n1, uint n2 = 1, uint n3 = 1, uint n4 = 1) : Base(n1,n2,n3,n4)
   {
     this->allocate(n1,n2,n3,n4);
@@ -31,65 +25,51 @@ public:
   }
 
   // device <-> device
-  inline void copyFrom(const DeviceBuffer& src) {
-    if (&src == this) return;
-    if (src.size() != this->size())
-      throw std::runtime_error("DeviceBuffer::copyFrom size mismatch");
+  inline void copyDeviceDevice(T* dstPtr, const T* srcPtr, const uint size){
     if constexpr (unified) {
 #if CUDA_MANAGED
-        CUDA_CHECK(cudaMemcpy(this->getDataPtr(), src.getDataPtr(), this->size()*sizeof(T), cudaMemcpyDefault); );
+        CUDA_CHECK(cudaMemcpy(dstPtr, srcPtr, size * sizeof(T), cudaMemcpyDefault); );
 #else
-      std::memcpy(this->getDataPtr(), src.getDataPtr(), this->size() * sizeof(T));
+      std::memcpy(dstPtr, srcPtr, size *  sizeof(T));
 #endif
     } else {
-      CUDA_CHECK(cudaMemcpy(this->getDataPtr(), src.getDataPtr(),this->size() * sizeof(T),cudaMemcpyDeviceToDevice));
+      CUDA_CHECK(cudaMemcpy(dstPtr, srcPtr, size * sizeof(T),cudaMemcpyDeviceToDevice));
     }
   }
-
-  inline void copyTo(DeviceBuffer& dst) const {
-    dst.copyFrom(*this);
+  inline void copyFromDevice(const T* srcPtr, uint size = 0) {
+    size = size > 0 ? size : this->size();
+    this->copyDeviceDevice(this->getDataPtr(), srcPtr, size);
+  }
+  inline void copyToDevice(T* dstPtr, uint size = 0) {
+    size = size > 0 ? size : this->size();
+    this->copyDeviceDevice(dstPtr, this->getDataPtr(), size);
   }
 
-  // host -> device
-  inline void copyFrom(const HostBuffer<T,Dim,unified>& src,cudaStream_t stream = 0)
-  {
+
+  // host <-> device
+  inline void copyHostDevice(T* dstPtr, const T* srcPtr, const uint size, cudaMemcpyKind cudaCopyKind, cudaStream_t stream = 0){
     if constexpr (unified) {
 #if CUDA_MANAGED
-        CUDA_CHECK(cudaMemcpy(this->getDataPtr(), src.getDataPtr(), this->size()*sizeof(T), cudaMemcpyDefault); );
+        CUDA_CHECK(cudaMemcpy(dstPtr, srcPtr, size * sizeof(T), cudaMemcpyDefault); );
 #else
-      std::memcpy(this->getDataPtr(), src.getDataPtr(), this->size() * sizeof(T));
+      std::memcpy(dstPtr, srcPtr, size * sizeof(T));
 #endif
     } else {
-      CUDA_CHECK(cudaMemcpyAsync(this->getDataPtr(), src.getDataPtr(),this->size() * sizeof(T),cudaMemcpyHostToDevice, stream));
+      CUDA_CHECK(cudaMemcpyAsync(dstPtr, srcPtr, size * sizeof(T), cudaCopyKind, stream));
       CUDA_CHECK(cudaStreamSynchronize(stream));
     }
   }
-
-  // device -> host
-  inline void copyTo(HostBuffer<T,Dim,unified>& dst, cudaStream_t stream = 0) const
-  {
-    if constexpr (unified) {
-#if CUDA_MANAGED
-        CUDA_CHECK(cudaMemcpy(dst.getDataPtr(), this->getDataPtr(), this->size()*sizeof(T), cudaMemcpyDefault); );
-#else
-      std::memcpy(dst.getDataPtr(), this->getDataPtr(), this->size() * sizeof(T));
-#endif
-    } else {
-      CUDA_CHECK(cudaMemcpyAsync(dst.getDataPtr(), this->getDataPtr(),this->size() * sizeof(T),cudaMemcpyDeviceToHost,stream));
-      CUDA_CHECK(cudaStreamSynchronize(stream));
-    }
+  inline void copyFromHost(const T* srcPtr, const uint size, cudaStream_t stream = 0){
+    this->copyHostDevice(this->getDataPtr(), srcPtr, size, cudaMemcpyHostToDevice, stream);
+  }
+  inline void copyToHost(T* dst, const uint size, cudaStream_t stream = 0) {
+    this->copyHostDevice(dst, this->getDataPtr(), size, cudaMemcpyDeviceToHost, stream);
   }
 
-  inline void selfCopy(T* newPtr, T* oldPtr, uint oldSize){
-    if constexpr (unified) {
-#if CUDA_MANAGED
-        CUDA_CHECK(cudaMemcpy(newPtr, oldPtr, oldSize * sizeof(T), cudaMemcpyDefault); );
-#else
-        std::memcpy(newPtr, oldPtr, oldSize * sizeof(T));        
-#endif
-    } else {
-      CUDA_CHECK(cudaMemcpy(newPtr, oldPtr, oldSize * sizeof(T),cudaMemcpyDeviceToDevice));
-    }
+  
+  // self type copy
+  inline void selfTypeCopy(T* dstPtr, const T* srcPtr, const uint size) override {
+    this->copyDeviceDevice(dstPtr, srcPtr, size);
   }
 
   inline void allocateForUnifiedMemory(T* ptr){
@@ -102,7 +82,7 @@ public:
 
 protected:
   // allocation & deallocation
-  inline void allocate(int n1, uint n2 = 1, uint n3 = 1, uint n4 = 1) override {
+  inline void allocate(const uint n1, const uint n2 = 1, const uint n3 = 1, const uint n4 = 1) override {
     if(this->total_ > 0){
         if constexpr (unified) {
 #if CUDA_MANAGED

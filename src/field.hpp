@@ -1,6 +1,4 @@
 #pragma once
-#include "hostBufferSH.hpp"
-#include "deviceBufferSH.hpp"
 #include "mirrorHostDeviceBufferSH.hpp"
 #include <cuda_runtime.h>
 
@@ -15,10 +13,10 @@ public:
     delete mirrorBuf_;
   }
 
-  inline HostBuffer<T,Dim,unified>* getHostBufferPtr(){
+  inline HostPinnedBuffer<T,Dim,unified>* getHostBufferPtr(){
     return this->mirrorBuf_->getHostBufferPtr();
   }
-  inline const HostBuffer<T,Dim,unified>* getHostBufferPtr() const noexcept {
+  inline const HostPinnedBuffer<T,Dim,unified>* getHostBufferPtr() const noexcept {
     return this->mirrorBuf_->getHostBufferPtr();
   }
 

@@ -24,27 +24,23 @@ public:
         this->deallocate();
     }
 
-    void copyHostToDevice(cudaStream_t stream = 0){
+    inline void copyHostToDevice(cudaStream_t stream = 0){
         if constexpr (unified){}
-        else{
-            this->hostBuf_->copyTo(*(this->deviceBuf_), stream);
-        }
+        else{this->hostBuf_->copyToDevice(this->deviceBuf_->getDataPtr(), this->size(), stream);}
     }
-    
-    void copyDeviceToHost(cudaStream_t stream = 0){
+    inline void copyDeviceToHost(cudaStream_t stream = 0){
         if constexpr (unified){}
-        else{
-            this->hostBuf_->copyFrom(*(this->deviceBuf_), stream);
-        }
+        else{this->hostBuf_->copyFromDevice(this->deviceBuf_->getDataPtr(), this->size(), stream);}
+        //else{this->deviceBuf_->copyToHost(this->hostBuf_->getDataPtr(), this->size(), stream);}
     }
 
-    void selfCopy(T* newPtr, T* oldPtr, uint oldSize) override {}
+    inline void selfTypeCopy(T* dstPtr, const T* srcPtr, const uint size) override {}
 
     void expandBuffer(const uint n1, const uint n2=1, const uint n3=1, const uint n4=1, cudaStream_t stream = 0 ) override {
         this->setExtents(n1,n2,n3,n4);
         hostBuf_->expandBuffer(n1,n2,n3,n4,stream);
         deviceBuf_->expandBuffer(n1,n2,n3,n4,stream);
-  }
+    }
 
     inline HostPinnedBuffer<T,Dim,unified>* getHostBufferPtr(){
         return this->hostBuf_;
@@ -70,6 +66,15 @@ public:
     __host__ __device__ __forceinline__ const T* getDeviceDataPtr() const noexcept { 
         if constexpr (unified){return this->hostBuf_->getDataPtr();} 
         else{return this->deviceBuf_->getDataPtr();}
+    }
+
+    template<typename... Args>
+    inline T& operator()(Args... args) {
+        return (*(this->getHostBufferPtr()))(args...);
+    }
+    template<typename... Args>
+    inline const T& operator()(Args... args) const {
+        return (*(this->getHostBufferPtr()))(args...);
     }
 
 protected:
