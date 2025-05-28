@@ -1,5 +1,5 @@
 #pragma once
-#include "mirrorHostDeviceBufferSH.hpp"
+#include "MirrorHostDeviceBufferSH.hpp"
 #include <cuda_runtime.h>
 
 template<typename T, uint Dim,bool unified=false>

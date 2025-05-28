@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.18)
-project(CUDAFieldHeadersTest LANGUAGES CXX CUDA)
+project(CudaTestDataConnector LANGUAGES CXX CUDA)
 
 # C++17
 set(CMAKE_CXX_STANDARD 17)
@@ -10,27 +10,27 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(CUDAToolkit QUIET)
 
 # Build test executable
-add_executable(test_field
-  test.cu
+add_executable(testDataConnector
+  testDataConnector.cu
 )
 
 # include your headers
-target_include_directories(test_field PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/src
+target_include_directories(testDataConnector PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../include
 )
 
 # link CUDA runtime, trying both possible imported targets
 if (TARGET CUDAToolkit::cudart)
-  target_link_libraries(test_field PRIVATE
+  target_link_libraries(testDataConnector PRIVATE
     CUDAToolkit::cudart
   )
 else()
   # fallback to the classic FindCUDA
   find_package(CUDA REQUIRED)
-  target_link_libraries(test_field PRIVATE
+  target_link_libraries(testDataConnector PRIVATE
     CUDA::cudart
   )
 endif()
 
 enable_testing()
-add_test(NAME FieldTests COMMAND test_field)
+add_test(NAME FieldTests COMMAND testDataConnector)

@@ -1,7 +1,7 @@
 #pragma once
-#include "virtualBuffer.hpp"
-#include "hostPinnedBufferSH.hpp"
-#include "deviceBufferSH.hpp"
+#include "VirtualBuffer.hpp"
+#include "HostPinnedBufferSH.hpp"
+#include "DeviceBufferSH.hpp"
 #include <cuda_runtime.h>
 #include <new>
 #include <cstring>

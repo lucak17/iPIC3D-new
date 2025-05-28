@@ -1,10 +1,10 @@
 // test.cpp
 
-#include "hostPinnedBufferSH.hpp"
-#include "hostBufferSH.hpp"
-#include "deviceBufferSH.hpp"
-#include "mirrorHostDeviceBufferSH.hpp"
-#include "field.hpp"
+#include "HostPinnedBufferSH.hpp"
+#include "HostBufferSH.hpp"
+#include "DeviceBufferSH.hpp"
+#include "MirrorHostDeviceBufferSH.hpp"
+#include "Field.hpp"
 
 #include <cuda_runtime.h>
 #include <iostream>
