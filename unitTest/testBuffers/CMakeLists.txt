@@ -16,7 +16,7 @@ add_executable(testBuffers
 
 # include your headers
 target_include_directories(testBuffers PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../include/buffers
 )
 
 # link CUDA runtime, trying both possible imported targets
