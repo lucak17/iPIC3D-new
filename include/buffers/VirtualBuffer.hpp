@@ -1,4 +1,5 @@
 #pragma once
+#include <cuda_runtime.h>
 #include <cstddef>
 #include <stdexcept>
 #include <type_traits>

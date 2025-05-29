@@ -45,16 +45,23 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
  # link CUDA runtime, trying both possible imported targets
 if (TARGET CUDAToolkit::cudart)
-  target_link_libraries(${PROJECT_NAME} PRIVATE
+  target_link_libraries(testField PRIVATE
     CUDAToolkit::cudart
   )
 else()
   # fallback to the classic FindCUDA
   find_package(CUDA REQUIRED)
-  target_link_libraries(${PROJECT_NAME} PRIVATE
+  target_link_libraries(testField PRIVATE
     CUDA::cudart
   )
 endif()
+
+# manually set MPI 
+set(MPI_mpi_cray_LIBRARY /opt/cray/pe/mpich/8.1.28/ofi/cray/17.0/lib/libmpi_cray.so)
+set(Cray_xpmem_LIBRARY /opt/cray/xpmem/2.8.2-1.0_3.9__g84a27a5.shasta/lib64/libxpmem.so)
+
+include_directories(/opt/cray/pe/mpich/8.1.28/ofi/cray/17.0/include)
+target_link_libraries(${PROJECT_NAME} PUBLIC ${MPI_mpi_cray_LIBRARY} ${Cray_xpmem_LIBRARY})
 
 
 

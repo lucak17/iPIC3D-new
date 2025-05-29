@@ -7,7 +7,7 @@ class FieldCPU {
 public:
   FieldCPU(uint n1, uint n2=1, uint n3=1, uint n4=1)
   {
-    buf_ = new BufferType(n1,n2,n3,n4);
+    buf_ = new HostBufferCPU<T,Dim,unified>(n1,n2,n3,n4);
   }
   ~FieldCPU() {
     delete buf_;
