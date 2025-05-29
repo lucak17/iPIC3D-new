@@ -1,5 +1,6 @@
 #pragma once
 #include "VirtualBuffer.hpp"
+#include "CudaHelper.hpp"
 #include <cuda_runtime.h>
 #include <new>
 #include <cstring>

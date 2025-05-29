@@ -1,7 +1,5 @@
 #pragma once
 #include "VirtualBuffer.hpp"
-#include "CudaHelper.hpp"
-#include <cuda_runtime.h>
 #include <new>
 #include <cstring>
 #include <stdexcept>
@@ -12,15 +10,15 @@
 //==============================================================================
 
 template<typename T, uint Dim, bool unified = false>
-class HostBuffer : public VirtualBuffer<T,Dim,unified> {
+class HostBufferCPU : public VirtualBuffer<T,Dim,unified> {
 public:
   using Base = VirtualBuffer<T,Dim,unified>;
 
-  HostBuffer(uint n1, uint n2 = 1,uint n3 = 1, uint n4 = 1) : Base(n1,n2,n3,n4)
+  HostBufferCPU(uint n1, uint n2 = 1,uint n3 = 1, uint n4 = 1) : Base(n1,n2,n3,n4)
   {
     this->allocate(n1,n2,n3,n4);
   }
-  ~HostBuffer() override{
+  ~HostBufferCPU() override{
     this->deallocate();
   };
 
@@ -37,25 +35,6 @@ public:
     this->copyHostHost(dstPtr, this->getDataPtr(), size);
   }
 
-  // host <-> device
-  inline void copyHostDevice(T* dstPtr, const T* srcPtr, const uint size, cudaMemcpyKind cudaCopyKind, cudaStream_t stream = 0){      
-    if constexpr (unified) {
-#if CUDA_MANAGED
-        CUDA_CHECK(cudaMemcpy(dstPtr, srcPtr, size * sizeof(T), cudaMemcpyDefault); );
-#else
-        std::memcpy(dstPtr, srcPtr, size * sizeof(T));        
-#endif
-    } else { 
-      CUDA_CHECK(cudaMemcpyAsync(dstPtr, srcPtr, size * sizeof(T),cudaCopyKind,stream));
-      CUDA_CHECK(cudaStreamSynchronize(stream));
-    }  
-  }
-  inline void copyFromDevice(const T* srcPtr, const uint size, cudaStream_t stream = 0){
-    this->copyHostDevice(this->getDataPtr(), srcPtr, size, cudaMemcpyDeviceToHost, stream);
-  }
-  inline void copyToDevice(T* dst, const uint size, cudaStream_t stream = 0){
-    this->copyHostDevice(dst, this->getDataPtr(), size, cudaMemcpyHostToDevice, stream);
-  }
 
   // self type copy
   inline void selfTypeCopy(T* dstPtr, const T* srcPtr, const uint size) override {

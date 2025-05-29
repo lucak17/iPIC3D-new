@@ -1,5 +1,6 @@
 #pragma once
 #include "VirtualBuffer.hpp"
+#include "CudaHelper.hpp"
 #include "HostPinnedBufferSH.hpp"
 #include "DeviceBufferSH.hpp"
 #include <cuda_runtime.h>

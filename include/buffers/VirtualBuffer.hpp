@@ -1,20 +1,10 @@
 #pragma once
-#include <cuda_runtime.h>
 #include <cstddef>
 #include <stdexcept>
 #include <type_traits>
 
 
-#ifndef CUDA_CHECK
-#define CUDA_CHECK(call)                                  \
-  do {                                                    \
-    cudaError_t err = call;                               \
-    if (err != cudaSuccess)                               \
-      throw std::runtime_error(cudaGetErrorString(err));  \
-  } while (0)
-#endif
-
-#define CUDA_MANAGED 1
+#define CUDA_MANAGED 0
 
 // Abstract base for 1D–4D flat storage + indexing
 template<typename T, uint Dim, bool unified>
