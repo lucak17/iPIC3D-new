@@ -8,7 +8,7 @@
 #include <cstring>
 #include <stdexcept>
 
-
+using uint = std::uint32_t;
 
 template<typename T, uint Dim, bool unified = false>
 class MirrorHostDeviceBuffer : public VirtualBuffer<T,Dim,unified> {

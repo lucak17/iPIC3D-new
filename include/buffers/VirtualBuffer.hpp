@@ -3,9 +3,11 @@
 #include <cstddef>
 #include <stdexcept>
 #include <type_traits>
+#include <cstdint>
 
+using uint = std::uint32_t;
 
-#define CUDA_MANAGED 0
+#define CUDA_MANAGED 1
 
 // Abstract base for 1D–4D flat storage + indexing
 template<typename T, uint Dim, bool unified>
@@ -50,7 +52,7 @@ public:
 
   __host__ __device__ __forceinline__ uint size() const noexcept { return total_; }
 
-  // 1D…4D operator() as before…
+  // 1D…4D operator()
   template<uint D = Dim>
   __host__ __device__ __forceinline__ std::enable_if_t<D==1, T&>
   operator()(const uint i) noexcept {
@@ -93,6 +95,28 @@ public:
   __host__ __device__ __forceinline__ std::enable_if_t<D==4, const T&>
   operator()(const uint i, const uint j, const uint k, const uint l) const noexcept {
     return data_[i + j*stride_j_ + k*stride_k_ + l*stride_l_];
+  }
+
+  // get 1D flat index
+  template<uint D = Dim>
+  __host__ __device__ __forceinline__ std::enable_if_t<D==1, uint>
+  get1DFlatIndex(const uint i) const noexcept {
+    return i;
+  }
+  template<uint D = Dim>
+  __host__ __device__ __forceinline__ std::enable_if_t<D==2, uint>
+  get1DFlatIndex(const uint i, const uint j) const noexcept {
+    return i + j*stride_j_;
+  }
+  template<uint D = Dim>
+  __host__ __device__ __forceinline__ std::enable_if_t<D==3, uint>
+  get1DFlatIndex(const uint i, const uint j, const uint k) const noexcept {
+    return i + j*stride_j_ + k*stride_k_;
+  }
+  template<uint D = Dim>
+  __host__ __device__ __forceinline__ std::enable_if_t<D==4, uint>
+  get1DFlatIndex(const uint i, const uint j, const uint k, const uint l) const noexcept {
+    return i + j*stride_j_ + k*stride_k_ + l*stride_l_;
   }
 
 protected:

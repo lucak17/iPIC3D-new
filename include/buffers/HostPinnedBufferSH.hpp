@@ -7,6 +7,9 @@
 #include <stdexcept>
 #include <iostream>
 
+
+using uint = std::uint32_t;
+
 //==============================================================================
 // HostPinnedBuffer: pinned or unified‐aligned host memory
 //==============================================================================

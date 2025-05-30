@@ -4,6 +4,8 @@
 #include <cuda_runtime.h>
 #include <type_traits>
 
+using uint = std::uint32_t;
+
 template<typename T, uint Dim, bool hostOnly=false, bool unified=false>
 class Field {
   using BufferType = std::conditional_t<hostOnly,
@@ -70,6 +72,11 @@ public:
   template<typename... Args>
   inline const T& operator()(Args... args) const {
     return (*(this->getHostBufferPtr()))(args...);
+  }
+
+  template<typename... Args>
+  inline uint get1DFlatIndex(Args... args) const {
+    return this->getHostBufferPtr()->get1DFlatIndex(args...);
   }
 
 private:
