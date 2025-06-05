@@ -78,7 +78,7 @@ public:
     #endif
     }
 
-    // Queryors
+    // Query
     MPI_Comm getGlobalComm() const { return MPIManagerInitialized_ ? PIC_GLOBAL_COMM : MPI_COMM_NULL; }
     uint getGlobalRank() const { return globalRank_; }
     uint getGlobalNprocesses() const { return globalNprocs_; }

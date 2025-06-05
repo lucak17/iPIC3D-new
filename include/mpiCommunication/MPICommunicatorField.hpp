@@ -30,17 +30,38 @@ public:
 
     ~CommunicatorField(){}
 
+    createMPIDataType(uint nx, uint ny, uint nz, const VirtualBuffer<T,Dim,unified>& buffer){
+        // 0 0 0 -> 0 0 1
+        const uint dim = 3;
+        const uint dimm1 = dim-1;
+        for(uint k = -1; k<dimm1; k++ ){
+            for(uint j = -1; j<dimm1; j++ ){
+                for(uint i = -1; i<dimm1; i++ ){
+                    uint idxDirectionComm = (i + 1) * dim + (j + 1) * dim + (k + 1) * dim * dim;
+                    uint i0 = i > 0 ? nx : 0;
+                    uint idxDataSendStart = buffer.get1DFlatIndex()
+                }
+            }
+        }
+    }
 
 private:
     uint halo[3];
+    std::array<MPI_Datatype,27> send_type;
+    std::array<MPI_Datatype,27> rcv_type;
+    /*
+    std::array<MPI_Datatype,6> send_type_face;
+    std::array<MPI_Datatype,6> rcv_type_face;
+    std::array<MPI_Datatype,12> send_type_edge;
+    std::array<MPI_Datatype,12> rcv_type_edge;
+    std::array<MPI_Datatype,8> send_type_corner;
+    std::array<MPI_Datatype,8> rcv_type_corner;
+    */
 };
 
 
 template<int Mask>
-void communicate(double* data,
-                 int nx, int ny, int nz,
-                 int H,
-                 MPI_Comm cart)
+void communicate(double* data, int nx, int ny, int nz, int H, MPI_Comm cart)
 {
     // full sizes including halos
     int size[3] = { nz + 2*H,
