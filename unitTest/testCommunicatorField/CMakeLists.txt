@@ -56,7 +56,11 @@ else()
   )
 endif()
 
+# Tell CMake to compile with the MPI include path:
+target_include_directories(${PROJECT_NAME} PRIVATE ${MPI_CXX_INCLUDE_PATH})
 
+# And to link against the MPI library:
+target_link_libraries(${PROJECT_NAME} PRIVATE ${MPI_CXX_LIBRARIES})
 
 # Include directories
 target_include_directories(${PROJECT_NAME} PUBLIC include)
