@@ -65,7 +65,8 @@ void test_communication(){
     int h3 = 3;
     Field<float,3,true,false> ff(d1,d2,d3,1,h1,h2,h3);
     std::cout << "In test communication rank "<< MPIManager::getInstance().getFieldRank() << std::endl;
-    ff.mpiFillHaloCommunicateWaitAll<FACES>();
+    //ff.mpiFillHaloCommunicateWaitAll<FACES+EDGES>();
+    ff.mpiFillHaloCommunicateWaitAll<FACES+EDGES+CORNERS>();
 }
 
 int main(int argc, char **argv) {
@@ -81,8 +82,9 @@ int main(int argc, char **argv) {
     //auto& mpiInstance = MPIManager::getInstance();
     int dimensions[Dim] = {std::atoi(argv[1]),std::atoi(argv[2]),std::atoi(argv[3])};
     std::cout<< "MPI topology "<< dimensions[0] << ", " << dimensions[1]  << ", " << dimensions[2] <<std::endl
-;    bool periodic[Dim] = {0,0,0};
+;    bool periodic[Dim] = {1,1,0};
     MPIManager::getInstance().initCartesianCommunicatorField(Dim,dimensions,periodic);
+    /*
     try {
         test_constructor_and_size_1D();
         test_data_ptr_non_null_1D();
@@ -94,18 +96,25 @@ int main(int argc, char **argv) {
         std::cerr << "An exception was thrown during tests: " << e.what() << "\n";
         return 1;
     }
-
     std::cout << "✅ All Field manual tests passed.\n";
+    */
+
+    MPI_Barrier(MPIManager::getInstance().getGlobalComm());
+    std::cout << "before test communication rank "<< MPIManager::getInstance().getGlobalRank() << std::endl;
+    const int NtestComm = 3;
+    for(int i = 0; i<NtestComm; i++){
+        test_communication();
+        std::cout << " Test communication passed " << i+1 << "/"<<NtestComm << std::endl;
+        MPI_Barrier(MPIManager::getInstance().getGlobalComm());
+    }
+    
     int b = 0;
-    for(int i= 0; i< 1000; i++){
+    for(int i= 0; i< 10000; i++){
         b=b+i;
     }
     MPI_Barrier(MPIManager::getInstance().getGlobalComm());
-    std::cout << "before test communication rank "<< MPIManager::getInstance().getGlobalRank() << std::endl;
-    test_communication();
-    std::cout << " Test communication passed" << b << std::endl;
-
+    std::cout << " Test communication passed END ALL tests " << b << std::endl;
     MPIManager::getInstance().finalize_mpi();
-
+    std::cout << " Test communication passed END ALL tests after finalize " << b+3 << std::endl;
     return 0;
 }

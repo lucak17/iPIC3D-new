@@ -10,6 +10,28 @@
 
 //using uint = std::uint32_t;
 
+
+
+class MPIException : public std::runtime_error {
+public:
+    MPIException(int error_code) : std::runtime_error(build_msg(error_code)){}
+
+private:
+    static std::string build_msg(int error_code) {
+        char buf[MPI_MAX_ERROR_STRING];
+        int len = 0;
+        MPI_Error_string(error_code, buf, &len);
+        return std::string(buf, len);
+    }
+};
+
+inline void mpi_check(int err) {
+    if (err != MPI_SUCCESS) {
+        throw MPIException(err);
+    }
+}
+
+
 // Singleton class to manage MPI context and Cartesian communicator
 class MPIManager {
 public:
@@ -26,10 +48,10 @@ public:
         globalRank_ = 0;
         globalNprocs_ = 1;
 #else
-        MPI_Init(argc, argv);
-        MPI_Comm_dup(MPI_COMM_WORLD, &PIC_GLOBAL_COMM);
-        MPI_Comm_rank(PIC_GLOBAL_COMM, &globalRank_);
-        MPI_Comm_size(PIC_GLOBAL_COMM, &globalNprocs_);
+        mpi_check( MPI_Init(argc, argv) );
+        mpi_check( MPI_Comm_dup(MPI_COMM_WORLD, &PIC_GLOBAL_COMM) );
+        mpi_check( MPI_Comm_rank(PIC_GLOBAL_COMM, &globalRank_) );
+        mpi_check( MPI_Comm_size(PIC_GLOBAL_COMM, &globalNprocs_) );
 #endif
         MPIManagerInitialized_ = true;
     }
@@ -49,13 +71,13 @@ public:
         periodicField_.assign(periodic, periodic + dimField_);
 
         // Create Cartesian communicator
-        MPI_Cart_create(PIC_GLOBAL_COMM, dimField_, dimensionsField_.data(), periodicInt.data(),reorder, &FIELD_COMM);
+        mpi_check( MPI_Cart_create(PIC_GLOBAL_COMM, dimField_, dimensionsField_.data(), periodicInt.data(),reorder, &FIELD_COMM) );
         MPI_Comm_set_errhandler(FIELD_COMM, MPI_ERRORS_RETURN);
-        MPI_Comm_size(FIELD_COMM, &fieldNprocs_);
-        MPI_Comm_rank(FIELD_COMM, &fieldRank_);
+        mpi_check( MPI_Comm_size(FIELD_COMM, &fieldNprocs_) );
+        mpi_check( MPI_Comm_rank(FIELD_COMM, &fieldRank_) );
         // Get this process's coordinates in the Cartesian grid
         coordinatesField_.assign(dimField_, 0);
-        MPI_Cart_coords(FIELD_COMM, fieldRank_, dimField_, coordinatesField_.data());
+        mpi_check( MPI_Cart_coords(FIELD_COMM, fieldRank_, dimField_, coordinatesField_.data()) );
 #endif
         fieldCommInitialized_ = true;
     }
@@ -75,19 +97,34 @@ public:
         periodicParticle_.assign(periodic, periodic + dimParticle_);
 
         // Create Cartesian communicator
-        MPI_Cart_create(PIC_GLOBAL_COMM, dimParticle_, dimensionsParticle_.data(), periodicInt.data(), reorder, &PARTICLE_COMM);
-        MPI_Comm_size(PARTICLE_COMM, &particleNprocs_);
-        MPI_Comm_rank(PARTICLE_COMM, &particleRank_);
+        mpi_check( MPI_Cart_create(PIC_GLOBAL_COMM, dimParticle_, dimensionsParticle_.data(), periodicInt.data(), reorder, &PARTICLE_COMM) );
+        mpi_check( MPI_Comm_size(PARTICLE_COMM, &particleNprocs_) );
+        mpi_check( MPI_Comm_rank(PARTICLE_COMM, &particleRank_) );
         // Get this process's coordinates in the Cartesian grid
         coordinatesParticle_.assign(dimParticle_, 0);
-        MPI_Cart_coords(PARTICLE_COMM, particleRank_, dimParticle_, coordinatesParticle_.data());
+        mpi_check( MPI_Cart_coords(PARTICLE_COMM, particleRank_, dimParticle_, coordinatesParticle_.data()) );
 #endif
         particleCommInitialized_ = true;
     }
 
     static void finalize_mpi() {
     #ifndef NO_MPI
-        MPI_Finalize();
+        // Only free if they were actually initialized…
+        if(particleCommInitialized_){
+            mpi_check( MPI_Comm_free(&PARTICLE_COMM) );
+            particleCommInitialized_ = false;
+        }
+        if(fieldCommInitialized_){
+            mpi_check( MPI_Comm_free(&FIELD_COMM) );
+            fieldCommInitialized_ = false;
+        }
+        // Free the duplicated global communicator
+        if(MPIManagerInitialized_){
+            mpi_check( MPI_Comm_free(&PIC_GLOBAL_COMM) );
+            MPIManagerInitialized_ = false;
+        }
+        // Now the last MPI call in your program
+        mpi_check( MPI_Finalize() );
     #endif
     }
 
@@ -151,34 +188,3 @@ int MPIManager::globalNprocs_ = 0;
 bool MPIManager::MPIManagerInitialized_ = false;
 bool MPIManager::fieldCommInitialized_ = false;
 bool MPIManager::particleCommInitialized_ = false;
-
-
-
-class MPIException : public std::runtime_error {
-public:
-    MPIException(int error_code) : std::runtime_error(build_msg(error_code)){}
-
-private:
-    static std::string build_msg(int error_code) {
-        char buf[MPI_MAX_ERROR_STRING];
-        int len = 0;
-        MPI_Error_string(error_code, buf, &len);
-        return std::string(buf, len);
-    }
-};
-
-inline bool mpi_checkV0(int err) {
-    if (err != MPI_SUCCESS) {
-        throw MPIException(err);
-        return false;
-    }
-    else{
-        return true;
-    }
-}
-
-inline void mpi_check(int err) {
-    if (err != MPI_SUCCESS) {
-        throw MPIException(err);
-    }
-}

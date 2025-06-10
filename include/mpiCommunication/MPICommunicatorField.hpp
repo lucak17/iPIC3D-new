@@ -48,25 +48,28 @@ public:
         halo[0] = haloX;
         halo[1] = haloY;
         halo[2] = haloZ;
-        for (auto &dt : send_type) dt = MPI_DATATYPE_NULL;
-        for (auto &dt : rcv_type) dt = MPI_DATATYPE_NULL;
+        for (auto &dt : border_type) dt = MPI_DATATYPE_NULL;
+        for (auto &dt : halo_type) dt = MPI_DATATYPE_NULL;
+        // set all ranks to -1 --> null value
+        neighbour_.fill(-1);
         requestsSend_ = new MPI_Request[NUM_COMM];
         requestsRcv_ = new MPI_Request[NUM_COMM];
         statusesSend_ = new MPI_Status[NUM_COMM];
         statusesRcv_ = new MPI_Status[NUM_COMM];
         createMPIDataType(nx,ny,nz,buffer);
+        computeNeighbourRank();
     }
 
     ~MPICommunicatorField()
     {
-        for(int i = 0; i<static_cast<int>(send_type.size()); i++){
-            if (send_type[i] != MPI_DATATYPE_NULL) {
-                MPI_Type_free(&send_type[i]);
-                send_type[i] = MPI_DATATYPE_NULL;
+        for(int i = 0; i<static_cast<int>(border_type.size()); i++){
+            if (border_type[i] != MPI_DATATYPE_NULL) {
+                MPI_Type_free(&border_type[i]);
+                border_type[i] = MPI_DATATYPE_NULL;
             }
-            if (rcv_type[i] != MPI_DATATYPE_NULL) {
-                MPI_Type_free(&rcv_type[i]);
-                rcv_type[i] = MPI_DATATYPE_NULL;
+            if (halo_type[i] != MPI_DATATYPE_NULL) {
+                MPI_Type_free(&halo_type[i]);
+                halo_type[i] = MPI_DATATYPE_NULL;
             }
         }
         delete[] requestsSend_;
@@ -94,20 +97,21 @@ public:
                         uint idxDirectionComm = dirx + diry * communicationDim + dirz * communicationDim * communicationDim;
                         // indexes without halo points --> 0,0,0 is first element of inner+boundary
                         std::array<int,communicationDim> dir;
+                        // back to indexes -1 0 1
                         dir[0] = dirx - 1;
                         dir[1] = diry - 1;
                         dir[2] = dirz - 1;
                         uint numElementsComm = 1;
                         for(uint d = 0; d<communicationDim; d++){
                             idxStartSend[d] = dir[d] > 0 ? extentNoHalo[d] - halo[d] : 0;
-                            // note last data to send has idx = idxEndSend - 1
+                            // last data to send has idx = idxEndSend - 1
                             idxEndSend[d] = dir[d] == 0 ? extentNoHalo[d] : idxStartSend[d]+halo[d];
-                            //idxStartRcv[d] = dir[d] < 0 ? idxStartSend[d] - halo[d] : ( dir[d] == 0 ? 0 : idxEndSend[d]);
+                            // idxStartRcv[d] = dir[d] < 0 ? idxStartSend[d] - halo[d] : ( dir[d] == 0 ? 0 : idxEndSend[d]);
                             numElementsComm *= (idxEndSend[d] - idxStartSend[d]);
                         }
                         int* block_length = new int[numElementsComm];
-                        int* send_indx = new int[numElementsComm];
-                        int* rcv_indx = new int[numElementsComm];
+                        int* border_indx = new int[numElementsComm];
+                        int* halo_indx = new int[numElementsComm];
                         std::fill(block_length, block_length + numElementsComm, 1);
                         uint idxLoop = 0;
                         for(uint k = idxStartSend[2]; k<idxEndSend[2]; k++){
@@ -116,20 +120,20 @@ public:
                                     uint iShift = i + halo[0];
                                     uint jShift = j + halo[1];
                                     uint kShift = k + halo[2];
-                                    send_indx[idxLoop] = buffer.get1DFlatIndex(iShift, jShift, kShift);
-                                    rcv_indx[idxLoop] = buffer.get1DFlatIndex(iShift + dir[0]*halo[0], jShift + dir[1]*halo[1], kShift + dir[2]*halo[2]);
+                                    border_indx[idxLoop] = buffer.get1DFlatIndex(iShift, jShift, kShift);
+                                    halo_indx[idxLoop] = buffer.get1DFlatIndex(iShift + dir[0]*halo[0], jShift + dir[1]*halo[1], kShift + dir[2]*halo[2]);
                                     idxLoop++;
                                 }
                             }
                         }
 
-                        MPI_Type_indexed(numElementsComm, block_length, send_indx, getMPIType<T>(), &send_type[idxDirectionComm]);
-                        MPI_Type_commit(&send_type[idxDirectionComm]);
-                        MPI_Type_indexed(numElementsComm, block_length, rcv_indx, getMPIType<T>(), &rcv_type[idxDirectionComm]);
-                        MPI_Type_commit(&rcv_type[idxDirectionComm]);
+                        MPI_Type_indexed(numElementsComm, block_length, border_indx, getMPIType<T>(), &border_type[idxDirectionComm]);
+                        MPI_Type_commit(&border_type[idxDirectionComm]);
+                        MPI_Type_indexed(numElementsComm, block_length, halo_indx, getMPIType<T>(), &halo_type[idxDirectionComm]);
+                        MPI_Type_commit(&halo_type[idxDirectionComm]);
 
-                        delete[] send_indx;
-                        delete[] rcv_indx;
+                        delete[] border_indx;
+                        delete[] halo_indx;
                         delete[] block_length;
                     }
                 }
@@ -141,9 +145,44 @@ public:
         }
     }
 
+    void computeNeighbourRank(){
+        
+        constexpr int communicationDim = 3;
+        MPI_Comm  fieldComm  = MPIManager::getInstance().getFieldComm();
+        const auto myCoords = MPIManager::getInstance().getCoordsField();
+        auto computeNghb = [&](int dirx,int diry,int dirz) -> void{
+            const int idxDirectionComm = (dirx + 1) + (diry + 1) * communicationDim + (dirz + 1) * communicationDim * communicationDim;
+            assert(idxDirectionComm != 13);
+            // find neighbour
+            const int neighbour_coords[3] = {myCoords[0] + dirx, myCoords[1] + diry, myCoords[2] + dirz};
+            try {
+                mpi_check(MPI_Cart_rank(fieldComm, neighbour_coords, &neighbour_[idxDirectionComm]));
+            }
+            catch (const MPIException& ex) {
+                std::cerr << "Warning: MPI_Cart_rank failed for mycoords (" << myCoords[0] << "," << myCoords[1] << "," << myCoords[2] << ") " << " - neighbour_coords (" << neighbour_coords[0] << "," << neighbour_coords[1] << "," << neighbour_coords[2] << "): " << ex.what() << "\n";
+                neighbour_[idxDirectionComm] = -1;
+                return;  // skip this direction
+            }
+        };
+        
+        constexpr std::array<std::array<int,3>,26> directions = {{ 
+            // faces
+            std::array<int,3>{-1,0,0}, std::array<int,3>{1,0,0}, std::array<int,3>{0,-1,0}, 
+            std::array<int,3>{0,1,0}, std::array<int,3>{0,0,-1}, std::array<int,3>{0,0,1},
+            // edges 
+            std::array<int,3>{-1,-1,0}, std::array<int,3>{1,-1,0}, std::array<int,3>{-1,1,0}, std::array<int,3>{1,1,0},
+            std::array<int,3>{-1,0,-1}, std::array<int,3>{1,0,-1}, std::array<int,3>{-1,0,1}, std::array<int,3>{1,0,1},
+            std::array<int,3>{0,-1,-1}, std::array<int,3>{0,1,-1}, std::array<int,3>{0,-1,1}, std::array<int,3>{0,1,1},
+            // corners
+            std::array<int,3>{-1,-1,-1}, std::array<int,3>{1,-1,-1}, std::array<int,3>{1,1,-1}, std::array<int,3>{1,1,1},
+            std::array<int,3>{-1,1,-1}, std::array<int,3>{-1,-1,1}, std::array<int,3>{-1,1,1}, std::array<int,3>{1,-1,1} }};
+        for (auto const& [dirx,diry,dirz] : directions){
+            computeNghb(dirx,diry,dirz);
+        }        
+    }
 
     void communicateWaitAllSendAndCheck(int countMsg) const {
-        MPI_Waitall(countMsg, requestsSend_, statusesSend_);
+        mpi_check( MPI_Waitall(countMsg, requestsSend_, statusesSend_) );
         for (int i = 0; i < countMsg; i++){
             if (statusesSend_[i].MPI_ERROR != MPI_SUCCESS) {
                 std::cerr << "Error in MPI send " << i << ": " << statusesSend_[i].MPI_ERROR << std::endl;
@@ -152,7 +191,7 @@ public:
     }
 
     void communicateWaitAllRcvAndCheck(int countMsg) const {
-        MPI_Waitall(countMsg, requestsRcv_, statusesRcv_);
+        mpi_check( MPI_Waitall(countMsg, requestsRcv_, statusesRcv_) );
         for (int i = 0; i < countMsg; i++) {
             if (statusesRcv_[i].MPI_ERROR != MPI_SUCCESS) {
                 std::cerr << "Error in MPI recv " << i << ": " << statusesRcv_[i].MPI_ERROR << std::endl;
@@ -163,10 +202,8 @@ public:
     template<int Mask>
     int communicateFillHaloStart(T* data){
 
-        std::cout<< " In communicateFillHaloStart" <<std::endl;
         constexpr int communicationDim = 3;
         MPI_Comm  fieldComm  = MPIManager::getInstance().getFieldComm();
-
         countComm_ = 0;
         /*
         int maxNumComm = 0;
@@ -174,38 +211,33 @@ public:
         if constexpr (Mask & EDGES) {maxNumComm += 12;}
         if constexpr (Mask & CORNERS) {maxNumComm += 8;}
         */
-        auto myCoords = MPIManager::getInstance().getCoordsField();
-
+        const auto myCoords = MPIManager::getInstance().getCoordsField();
         auto startSendRcv = [&](int dirx,int diry,int dirz) -> void{
-            // find neighbour
-            int neighbour_coords[3] = {myCoords[0] + dirx, myCoords[1] + diry, myCoords[2] + dirz};
-            int neighbour;
-            // no neighbor in that direction
-            //std::cout<< "My coords " << myCoords[0] << " " << myCoords[1] << " "<< myCoords[2] << std::endl;
-            try {
-                mpi_check(MPI_Cart_rank(fieldComm, neighbour_coords, &neighbour));
-            }
-            catch (const MPIException& ex) {
-                std::cerr << "Warning: MPI_Cart_rank failed for coords (" << neighbour_coords[0] << "," << neighbour_coords[1] << "," << neighbour_coords[2] << "): " << ex.what() << "\n";
-                return;  // skip this direction
-            }
-            
-            //bool flag = mpi_check(MPI_Cart_rank(fieldComm, neighbour_coords, &neighbour));
-            std::cout<< "My coords " << myCoords[0] << " " << myCoords[1] << " "<< myCoords[2]
-            << " - Ngbh coords " << neighbour_coords[0] << " " << neighbour_coords[1] << " "<< neighbour_coords[2] << " - Ngbh rank "<< neighbour <<std::endl;
-            //std::cout<< " In startSendRcv 1" <<std::endl;
-            //if (ierr != MPI_SUCCESS || neighbour == MPI_PROC_NULL || neighbour == MPI_UNDEFINED){ return;}
-            //if (ierr != MPI_SUCCESS || neighbour < 0 || neighbour >= MPIManager::getInstance().getFieldNprocesses() ){ return;}  
-            
-            //std::cout<< " In startSendRcv 2" <<std::endl;
-            
-            int idxDirectionComm = (dirx + 1) + (diry + 1) * communicationDim + (dirz + 1) * communicationDim * communicationDim;
+
+            const int idxDirectionComm = (dirx + 1) + (diry + 1) * communicationDim + (dirz + 1) * communicationDim * communicationDim;
             assert(idxDirectionComm != 13);
-            //std::cout<< " In startSendRcv 3" <<std::endl;
+            // idxDirectionCommRcv = idxDirectionComm of the other rank that is sending data
+            const int idxDirectionCommRcv = (-1 * dirx + 1) + (-1 * diry + 1) * communicationDim + (-1 * dirz + 1) * communicationDim * communicationDim;
+
+            // find neighbour
+            const int neighbour_coords[3] = {myCoords[0] + dirx, myCoords[1] + diry, myCoords[2] + dirz};
+            const int neighbour = neighbour_[idxDirectionComm];
+            if(neighbour < 0)return;
+
+            //std::cout<< "My coords " << myCoords[0] << " " << myCoords[1] << " "<< myCoords[2]
+            //<< " - Ngbh coords " << neighbour_coords[0] << " " << neighbour_coords[1] << " "<< neighbour_coords[2] << " - Ngbh rank "<< neighbour <<std::endl;
+
+            std::cout<< "In startSendRcv mycoords (" << myCoords[0] << "," << myCoords[1] << "," << myCoords[2] << ") " << " - neighbour_coords (" << neighbour_coords[0] << "," << neighbour_coords[1] << "," << neighbour_coords[2] << "): "
+             << " sendDir " << "(" << dirx << "," << diry << "," << dirz << ") idxDirectionComm " 
+             << idxDirectionComm << " idxDirectionCommRcv " << idxDirectionCommRcv <<std::endl;
             // nonblocking communication
-            MPI_Irecv(data, 1, rcv_type[idxDirectionComm], neighbour, countComm_, fieldComm, &requestsRcv_[countComm_]);
-            MPI_Isend(data, 1, send_type[idxDirectionComm], neighbour, countComm_, fieldComm, &requestsSend_[countComm_]);
-            std::cout<< " In startSendRcv after call" <<std::endl;
+#if 1
+            mpi_check( MPI_Irecv(data, 1, halo_type[idxDirectionComm], neighbour, idxDirectionCommRcv, fieldComm, &requestsRcv_[countComm_]) );
+            mpi_check( MPI_Isend(data, 1, border_type[idxDirectionComm], neighbour, idxDirectionComm, fieldComm, &requestsSend_[countComm_]) );
+#else
+            mpi_check( MPI_Irecv(data, 1, halo_type[idxDirectionComm], neighbour, 0, fieldComm, &requestsRcv_[countComm_]) );
+            mpi_check( MPI_Isend(data, 1, border_type[idxDirectionComm], neighbour, 0, fieldComm, &requestsSend_[countComm_]) );
+#endif
             countComm_++;
         };
 
@@ -214,10 +246,7 @@ public:
             constexpr std::array<std::array<int,3>,6> faces = {{ 
                 std::array<int,3>{-1,0,0}, std::array<int,3>{1,0,0}, std::array<int,3>{0,-1,0}, 
                 std::array<int,3>{0,1,0}, std::array<int,3>{0,0,-1}, std::array<int,3>{0,0,1} }};
-            for (auto const& [dirx,diry,dirz] : faces){
-                //std::cout<< " Before startSendRcv" <<std::endl;
-                startSendRcv(dirx,diry,dirz);
-            }
+            for (auto const& [dirx,diry,dirz] : faces) startSendRcv(dirx,diry,dirz);
         }
 
         // communicate edges
@@ -243,17 +272,18 @@ public:
     template<int Mask>
     void communicateFillHaloStartAndWaitAll(T* data){
         int countMsg = communicateFillHaloStart<Mask>(data);
-        std::cout<< " After communicateFillHaloStart - n msg "<< countMsg <<std::endl;
+        //std::cout<< " After communicateFillHaloStart - n msg "<< countMsg <<std::endl;
         communicateWaitAllSendAndCheck(countMsg);
-        std::cout<< " After waitall send communication" <<std::endl;
+        //std::cout<< " After waitall send communication" <<std::endl;
         communicateWaitAllRcvAndCheck(countMsg);
         std::cout<< " End communication" <<std::endl;
     }
 
 private:
     uint halo[3];
-    std::array<MPI_Datatype,27> send_type;
-    std::array<MPI_Datatype,27> rcv_type;
+    std::array<MPI_Datatype,27> border_type;
+    std::array<MPI_Datatype,27> halo_type;
+    std::array<int,27> neighbour_;
     int countComm_ = 0;
     MPI_Request* requestsSend_;
     MPI_Request* requestsRcv_;
