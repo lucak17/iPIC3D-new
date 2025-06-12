@@ -211,8 +211,9 @@ public:
         if constexpr (Mask & EDGES) {maxNumComm += 12;}
         if constexpr (Mask & CORNERS) {maxNumComm += 8;}
         */
+        int myrank = MPIManager::getInstance().getFieldRank();
         const auto myCoords = MPIManager::getInstance().getCoordsField();
-        auto startSendRcv = [&](int dirx,int diry,int dirz) -> void{
+        auto startSendRcv = [&](int dirx,int diry,int dirz) -> void {
 
             const int idxDirectionComm = (dirx + 1) + (diry + 1) * communicationDim + (dirz + 1) * communicationDim * communicationDim;
             assert(idxDirectionComm != 13);
@@ -227,8 +228,8 @@ public:
             //std::cout<< "My coords " << myCoords[0] << " " << myCoords[1] << " "<< myCoords[2]
             //<< " - Ngbh coords " << neighbour_coords[0] << " " << neighbour_coords[1] << " "<< neighbour_coords[2] << " - Ngbh rank "<< neighbour <<std::endl;
 
-            std::cout<< "In startSendRcv mycoords (" << myCoords[0] << "," << myCoords[1] << "," << myCoords[2] << ") " << " - neighbour_coords (" << neighbour_coords[0] << "," << neighbour_coords[1] << "," << neighbour_coords[2] << "): "
-             << " sendDir " << "(" << dirx << "," << diry << "," << dirz << ") idxDirectionComm " 
+            std::cout<< "In startSendRcv mycoords (" << myCoords[0] << "," << myCoords[1] << "," << myCoords[2] << ") -> rank " << myrank << " - neighbour_coords (" << neighbour_coords[0] << "," << neighbour_coords[1] << "," << neighbour_coords[2] << ") -> neighbour " << neighbour
+             << " - sendDir " << "(" << dirx << "," << diry << "," << dirz << ") idxDirectionComm " 
              << idxDirectionComm << " idxDirectionCommRcv " << idxDirectionCommRcv <<std::endl;
             // nonblocking communication
 #if 1
@@ -277,6 +278,108 @@ public:
         //std::cout<< " After waitall send communication" <<std::endl;
         communicateWaitAllRcvAndCheck(countMsg);
         std::cout<< " End communication" <<std::endl;
+    }
+
+
+    template<int Mask>
+    int copyBorderToHaloSelf(T* data){
+
+        constexpr int communicationDim = 3;
+        MPI_Comm  fieldComm  = MPIManager::getInstance().getFieldComm();
+        const auto myCoords = MPIManager::getInstance().getCoordsField();
+        const auto myrank = MPIManager::getInstance().getFieldRank();
+        int countCopy = 0;
+        auto copyBorderHalo = [&](int dirx,int diry,int dirz) -> void {
+
+            const int idxDirectionComm = (dirx + 1) + (diry + 1) * communicationDim + (dirz + 1) * communicationDim * communicationDim;
+            assert(idxDirectionComm != 13);
+            // idxDirectionCommRcv = idxDirectionComm of the other rank that is sending data
+            MPI_Status status;
+            //mpi_check( MPI_Sendrecv(data, 1, border_type[idxDirectionComm], 0, 0, data, 1, halo_type[idxDirectionComm], 0, 0, MPI_COMM_SELF, &status) );
+            mpi_check( MPI_Irecv(data, 1, halo_type[idxDirectionComm], myrank, idxDirectionComm, fieldComm, &requestsRcv_[countCopy]) );
+            mpi_check( MPI_Isend(data, 1, border_type[idxDirectionComm], myrank, idxDirectionComm, fieldComm, &requestsSend_[countCopy]) );
+            countCopy++;
+        };
+        // communicate faces
+        if constexpr (Mask & FACES){
+            constexpr std::array<std::array<int,3>,6> faces = {{ 
+                std::array<int,3>{-1,0,0}, std::array<int,3>{1,0,0}, std::array<int,3>{0,-1,0}, 
+                std::array<int,3>{0,1,0}, std::array<int,3>{0,0,-1}, std::array<int,3>{0,0,1} }};
+            for (auto const& [dirx,diry,dirz] : faces) copyBorderHalo(dirx,diry,dirz);
+        }
+
+        // communicate edges
+        if constexpr (Mask & EDGES){
+            constexpr std::array<std::array<int,3>,12> edges = {{ 
+                std::array<int,3>{-1,-1,0}, std::array<int,3>{1,-1,0}, std::array<int,3>{-1,1,0}, std::array<int,3>{1,1,0},
+                std::array<int,3>{-1,0,-1}, std::array<int,3>{1,0,-1}, std::array<int,3>{-1,0,1}, std::array<int,3>{1,0,1},
+                std::array<int,3>{0,-1,-1}, std::array<int,3>{0,1,-1}, std::array<int,3>{0,-1,1}, std::array<int,3>{0,1,1} }};
+            for (auto const& [dirx,diry,dirz] : edges) copyBorderHalo(dirx,diry,dirz);
+        }
+        
+        // communicate corners
+        if constexpr (Mask & CORNERS){
+            constexpr std::array<std::array<int,3>,8> corners = {{ 
+                std::array<int,3>{-1,-1,-1}, std::array<int,3>{1,-1,-1}, std::array<int,3>{1,1,-1}, std::array<int,3>{1,1,1},
+                std::array<int,3>{-1,1,-1}, std::array<int,3>{-1,-1,1}, std::array<int,3>{-1,1,1}, std::array<int,3>{1,-1,1}}};
+            for (auto const& [dirx,diry,dirz] : corners) copyBorderHalo(dirx,diry,dirz);
+        }
+
+        communicateWaitAllSendAndCheck(countCopy);
+        communicateWaitAllRcvAndCheck(countCopy);
+        return countCopy;
+    }
+
+    template<int Mask>
+    int copyHaloToBorderSelf(T* data){
+
+        constexpr int communicationDim = 3;
+        MPI_Comm  fieldComm  = MPIManager::getInstance().getFieldComm();
+        const auto myCoords = MPIManager::getInstance().getCoordsField();
+        const auto myrank = MPIManager::getInstance().getFieldRank();
+        int countCopy = 0;
+        
+        auto copyHaloBorder = [&](int dirx,int diry,int dirz) -> void {
+            std::cout<< "In copyHaloBorder lambda"  <<std::endl;
+            const int idxDirectionComm = (dirx + 1) + (diry + 1) * communicationDim + (dirz + 1) * communicationDim * communicationDim;
+            assert(idxDirectionComm != 13);
+            // idxDirectionCommRcv = idxDirectionComm of the other rank that is sending data
+            //MPI_Status status;
+            //mpi_check( MPI_Sendrecv(data, 1, halo_type[idxDirectionComm], 0, 0, data, 1, border_type[idxDirectionComm], 0, 0, MPI_COMM_SELF, &status) );
+            mpi_check( MPI_Irecv(data, 1, border_type[idxDirectionComm], myrank, idxDirectionComm, fieldComm, &requestsRcv_[countCopy]) );
+            mpi_check( MPI_Isend(data, 1, halo_type[idxDirectionComm], myrank, idxDirectionComm, fieldComm, &requestsSend_[countCopy]) );
+            countCopy++;
+        };
+        
+        // communicate faces
+        if constexpr (Mask & FACES){
+            constexpr std::array<std::array<int,3>,6> faces = {{ 
+                std::array<int,3>{-1,0,0}, std::array<int,3>{1,0,0}, std::array<int,3>{0,-1,0}, 
+                std::array<int,3>{0,1,0}, std::array<int,3>{0,0,-1}, std::array<int,3>{0,0,1} }};
+            for (auto const& [dirx,diry,dirz] : faces) copyHaloBorder(dirx,diry,dirz);
+        }
+
+        // communicate edges
+        if constexpr (Mask & EDGES){
+            constexpr std::array<std::array<int,3>,12> edges = {{ 
+                std::array<int,3>{-1,-1,0}, std::array<int,3>{1,-1,0}, std::array<int,3>{-1,1,0}, std::array<int,3>{1,1,0},
+                std::array<int,3>{-1,0,-1}, std::array<int,3>{1,0,-1}, std::array<int,3>{-1,0,1}, std::array<int,3>{1,0,1},
+                std::array<int,3>{0,-1,-1}, std::array<int,3>{0,1,-1}, std::array<int,3>{0,-1,1}, std::array<int,3>{0,1,1} }};
+            for (auto const& [dirx,diry,dirz] : edges) copyHaloBorder(dirx,diry,dirz);
+        }
+        
+        // communicate corners
+        if constexpr (Mask & CORNERS){
+            constexpr std::array<std::array<int,3>,8> corners = {{ 
+                std::array<int,3>{-1,-1,-1}, std::array<int,3>{1,-1,-1}, std::array<int,3>{1,1,-1}, std::array<int,3>{1,1,1},
+                std::array<int,3>{-1,1,-1}, std::array<int,3>{-1,-1,1}, std::array<int,3>{-1,1,1}, std::array<int,3>{1,-1,1}}};
+            for (auto const& [dirx,diry,dirz] : corners) copyHaloBorder(dirx,diry,dirz);
+        }
+
+        communicateWaitAllSendAndCheck(countCopy);
+        communicateWaitAllRcvAndCheck(countCopy);
+
+        return countCopy;
     }
 
 private:
