@@ -156,8 +156,9 @@ bool runTests1D(size_t N) {
     }
     std::cout<< "Test 5 done, starting test 6" <<std::endl;
     // 6) Field: CPU fill, kernel, back
+    constexpr bool hostOnly = false;
     {
-        Field<int,1,unified> f(N);
+        Field<int,1,hostOnly,unified> f(N);
         int *hptr = f.getHostDataPtr();
         int *dptr = f.getDeviceDataPtr();
 

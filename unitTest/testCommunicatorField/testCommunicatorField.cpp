@@ -81,8 +81,8 @@ int main(int argc, char **argv) {
     //dimensionsArr = {std::atoi(argv[1]),std::atoi(argv[2]),std::atoi(argv[3])};
     //auto& mpiInstance = MPIManager::getInstance();
     int dimensions[Dim] = {std::atoi(argv[1]),std::atoi(argv[2]),std::atoi(argv[3])};
-    std::cout<< "MPI topology "<< dimensions[0] << ", " << dimensions[1]  << ", " << dimensions[2] <<std::endl
-;    bool periodic[Dim] = {1,1,0};
+    std::cout<< "MPI topology "<< dimensions[0] << ", " << dimensions[1]  << ", " << dimensions[2] <<std::endl;
+    bool periodic[Dim] = {1,1,0};
     MPIManager::getInstance().initCartesianCommunicatorField(Dim,dimensions,periodic);
     /*
     try {
@@ -98,21 +98,30 @@ int main(int argc, char **argv) {
     }
     std::cout << "✅ All Field manual tests passed.\n";
     */
-
+    auto dimCommFields =  MPIManager::getInstance().getDimensionsField();
+    std::cout<< "MPI field topology "<< dimCommFields[0] << ", " << dimCommFields[1]  << ", " << dimCommFields[2] <<std::endl;
     MPI_Barrier(MPIManager::getInstance().getGlobalComm());
     std::cout << "before test communication rank "<< MPIManager::getInstance().getGlobalRank() << std::endl;
     const int NtestComm = 3;
     for(int i = 0; i<NtestComm; i++){
+//        test_communication();
+        try {
         test_communication();
+        } catch (const MPIException& e) {
+        std::cerr << "Rank "
+                    << MPIManager::getInstance().getFieldRank()
+                    << " MPIException: " << e.what() << "\n";
+        MPI_Abort(MPI_COMM_WORLD, 1);
+        }
         std::cout << " Test communication passed " << i+1 << "/"<<NtestComm << std::endl;
-        MPI_Barrier(MPIManager::getInstance().getGlobalComm());
+        MPI_Barrier(MPIManager::getInstance().getFieldComm());
     }
     
     int b = 0;
     for(int i= 0; i< 10000; i++){
         b=b+i;
     }
-    MPI_Barrier(MPIManager::getInstance().getGlobalComm());
+    MPI_Barrier(MPIManager::getInstance().getFieldComm());
     std::cout << " Test communication passed END ALL tests " << b << std::endl;
     MPIManager::getInstance().finalize_mpi();
     std::cout << " Test communication passed END ALL tests after finalize " << b+3 << std::endl;

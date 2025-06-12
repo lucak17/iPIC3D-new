@@ -54,6 +54,8 @@ public:
         mpi_check( MPI_Comm_size(PIC_GLOBAL_COMM, &globalNprocs_) );
 #endif
         MPIManagerInitialized_ = true;
+        fieldCommInitialized_ = false;
+        particleCommInitialized_ = false;
     }
 
     void initCartesianCommunicatorField(const int Dim, const int dimensions[], const bool periodic[], bool reorder=false) {
@@ -71,7 +73,7 @@ public:
         periodicField_.assign(periodic, periodic + dimField_);
 
         // Create Cartesian communicator
-        mpi_check( MPI_Cart_create(PIC_GLOBAL_COMM, dimField_, dimensionsField_.data(), periodicInt.data(),reorder, &FIELD_COMM) );
+        mpi_check( MPI_Cart_create(PIC_GLOBAL_COMM, dimField_, dimensionsField_.data(), periodicInt.data(), reorder, &FIELD_COMM) );
         MPI_Comm_set_errhandler(FIELD_COMM, MPI_ERRORS_RETURN);
         mpi_check( MPI_Comm_size(FIELD_COMM, &fieldNprocs_) );
         mpi_check( MPI_Comm_rank(FIELD_COMM, &fieldRank_) );
@@ -108,22 +110,24 @@ public:
     }
 
     static void finalize_mpi() {
-    #ifndef NO_MPI
-        // Only free if they were actually initialized…
+    #if NO_MPI
+    #else
+        // free particle communicator
         if(particleCommInitialized_){
             mpi_check( MPI_Comm_free(&PARTICLE_COMM) );
             particleCommInitialized_ = false;
         }
+        // free field communicator
         if(fieldCommInitialized_){
             mpi_check( MPI_Comm_free(&FIELD_COMM) );
             fieldCommInitialized_ = false;
         }
-        // Free the duplicated global communicator
+        // free duplicated global communicator
         if(MPIManagerInitialized_){
             mpi_check( MPI_Comm_free(&PIC_GLOBAL_COMM) );
             MPIManagerInitialized_ = false;
         }
-        // Now the last MPI call in your program
+        // call MPI_Finalize
         mpi_check( MPI_Finalize() );
     #endif
     }
