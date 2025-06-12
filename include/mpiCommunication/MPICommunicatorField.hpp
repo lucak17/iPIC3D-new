@@ -294,7 +294,6 @@ public:
             const int idxDirectionComm = (dirx + 1) + (diry + 1) * communicationDim + (dirz + 1) * communicationDim * communicationDim;
             assert(idxDirectionComm != 13);
             // idxDirectionCommRcv = idxDirectionComm of the other rank that is sending data
-            MPI_Status status;
             //mpi_check( MPI_Sendrecv(data, 1, border_type[idxDirectionComm], 0, 0, data, 1, halo_type[idxDirectionComm], 0, 0, MPI_COMM_SELF, &status) );
             mpi_check( MPI_Irecv(data, 1, halo_type[idxDirectionComm], myrank, idxDirectionComm, fieldComm, &requestsRcv_[countCopy]) );
             mpi_check( MPI_Isend(data, 1, border_type[idxDirectionComm], myrank, idxDirectionComm, fieldComm, &requestsSend_[countCopy]) );

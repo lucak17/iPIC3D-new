@@ -83,7 +83,7 @@ void test_communication(){
         }
     }
     ff.fillIndexNoHalo();
-
+    int c1 = ff.copyBorderToHaloSelf<FACES+EDGES+CORNERS>();
     for(int i = 0; i < MPIManager::getInstance().getFieldNprocesses(); i++ ){
         if (myrank==i){
             std::cout<< " Field rank " << myrank<<std::endl;
@@ -93,6 +93,7 @@ void test_communication(){
         MPI_Barrier(MPIManager::getInstance().getFieldComm());
     }
     MPI_Barrier(MPIManager::getInstance().getFieldComm());
+#if 0
     ff.mpiFillHaloCommunicateWaitAll<FACES>();
     MPI_Barrier(MPIManager::getInstance().getFieldComm());
     for(int i = 0; i < MPIManager::getInstance().getFieldNprocesses(); i++ ){
@@ -103,7 +104,8 @@ void test_communication(){
         }
         MPI_Barrier(MPIManager::getInstance().getFieldComm());
     }
-    int cc = ff.copyHaloToBorderSelf<FACES+EDGES+CORNERS>();
+#endif
+    int c2 = ff.copyHaloToBorderSelf<FACES>();
     MPI_Barrier(MPIManager::getInstance().getFieldComm());
     for(int i = 0; i < MPIManager::getInstance().getFieldNprocesses(); i++ ){
         if (myrank==i){
@@ -129,7 +131,7 @@ void test_communication(){
     }
     */
     
-    std::cout<< " count copies " << cc <<std::endl;
+    std::cout<< " count copies " << c1 << " "<< c2 <<std::endl;
     MPI_Barrier(MPIManager::getInstance().getFieldComm());
     for(int k = halo[2]; k<(extentsWithHalo[2] - halo[2]); k++){
         for(int j = halo[1]; j<(extentsWithHalo[1] - halo[1]); j++){
