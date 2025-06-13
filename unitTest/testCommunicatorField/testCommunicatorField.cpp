@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <cassert>
+#include <chrono>
 #include "Field.hpp"
 #include "MPIManager.hpp"
 
@@ -58,9 +59,9 @@ void test_indexing_2D() {
 
 void test_communication(){
     const int myrank = MPIManager::getInstance().getFieldRank();
-    int d1 = 6;
-    int d2 = 6;
-    int d3  = 6;
+    int d1 = 128;
+    int d2 = 64;
+    int d3  = 128;
     int h1 = 2;
     int h2 = 2;
     int h3 = 2;
@@ -71,7 +72,26 @@ void test_communication(){
     std::cout << "In test communication rank "<< MPIManager::getInstance().getFieldRank() << 
     " Extents with halo " << extentsWithHalo[0] << " " << extentsWithHalo[1] << " " << extentsWithHalo[2] << std::endl;
     
-    ff.fillHostBufferWithHalo(MPIManager::getInstance().getFieldRank());
+    //ff.fillHostBufferWithHalo(MPIManager::getInstance().getFieldRank());
+    ff.pointWiseOperatorVectorized<CORE+BORDER+HALO>([](auto...) -> float { return static_cast<float>(MPIManager::getInstance().getFieldRank()); });
+    const int nmax = 10;
+    auto t2 = std::chrono::high_resolution_clock::now();    
+    for(int i = 0; i < nmax; ++i){
+        ff.pointWiseOperator<CORE+BORDER+HALO>([](auto...) -> float { return static_cast<float>(MPIManager::getInstance().getFieldRank()); });
+    }
+    auto t3 = std::chrono::high_resolution_clock::now();
+    
+    auto t0 = std::chrono::high_resolution_clock::now();
+    for(int i = 0; i < nmax; ++i){
+        ff.pointWiseOperatorVectorized<CORE+BORDER+HALO>([](auto...) -> float { return static_cast<float>(MPIManager::getInstance().getFieldRank()); });
+    }
+    auto t1 = std::chrono::high_resolution_clock::now();
+    
+    double time1 = std::chrono::duration<double>(t1 - t0).count();
+    double time2 = std::chrono::duration<double>(t3 - t2).count();
+    std::cout << "Vectorized version avg time: " << (time1 / nmax) * 1e6 << " µs per call)" << std::endl;
+    std::cout << "Non Vectorized version avg time: " << (time2 / nmax) * 1e6 << " µs per call)" << std::endl;
+    
     for(int k = 0; k<extentsWithHalo[2]; k++){
         for(int j = 0; j<extentsWithHalo[1]; j++){
             for(int i = 0; i<extentsWithHalo[0]; i++){
@@ -90,7 +110,7 @@ void test_communication(){
         if (myrank==i){
             std::cout<< " Field rank " << myrank<<std::endl;
             //ff.printNoHalo();
-            ff.printWithHalo();
+            //ff.printWithHalo();
         }
         MPI_Barrier(MPIManager::getInstance().getFieldComm());
     }
@@ -115,7 +135,7 @@ void test_communication(){
         if (myrank==i){
             std::cout<< " Field rank " << myrank<<std::endl;
             //ff.printNoHalo();
-            ff.printWithHalo();
+            //ff.printWithHalo();
         }
         MPI_Barrier(MPIManager::getInstance().getFieldComm());
     }

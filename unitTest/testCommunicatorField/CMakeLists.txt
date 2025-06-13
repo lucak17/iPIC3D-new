@@ -22,6 +22,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 # Find MPI
 find_package(MPI REQUIRED)
 
+# Find OpenMP
+find_package(OpenMP REQUIRED)
+
+
 # Default to Release build type if not specified
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
@@ -61,6 +65,9 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${MPI_CXX_INCLUDE_PATH})
 
 # And to link against the MPI library:
 target_link_libraries(${PROJECT_NAME} PRIVATE ${MPI_CXX_LIBRARIES})
+
+# Link OpenMP
+target_link_libraries(${PROJECT_NAME} PRIVATE OpenMP::OpenMP_CXX)
 
 # Include directories
 target_include_directories(${PROJECT_NAME} PUBLIC include)

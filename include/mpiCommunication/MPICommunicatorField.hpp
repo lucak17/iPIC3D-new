@@ -11,8 +11,10 @@
 #include <VirtualBuffer.hpp>
 #include "MPIManager.hpp"
 
-
+#ifndef NUM_COMM
 #define NUM_COMM 26
+#endif
+
 using uint = std::uint32_t;
 
 // function to set MPI_Datatype according to T in MPI calls
