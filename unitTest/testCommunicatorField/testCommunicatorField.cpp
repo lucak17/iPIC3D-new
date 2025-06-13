@@ -83,19 +83,22 @@ void test_communication(){
         }
     }
     ff.fillIndexNoHalo();
-    int c1 = ff.copyBorderToHaloSelf<FACES+EDGES+CORNERS>();
+    std::cout<< "After fillIndexNoHalo" <<std::endl;
+    int c1 = 0;
+    //c1 = ff.copyBorderToHaloSelf<FACES+EDGES+CORNERS>();
     for(int i = 0; i < MPIManager::getInstance().getFieldNprocesses(); i++ ){
         if (myrank==i){
             std::cout<< " Field rank " << myrank<<std::endl;
-            ff.printNoHalo();
+            //ff.printNoHalo();
             ff.printWithHalo();
         }
         MPI_Barrier(MPIManager::getInstance().getFieldComm());
     }
     MPI_Barrier(MPIManager::getInstance().getFieldComm());
-#if 0
+
     ff.mpiFillHaloCommunicateWaitAll<FACES>();
     MPI_Barrier(MPIManager::getInstance().getFieldComm());
+#if 0
     for(int i = 0; i < MPIManager::getInstance().getFieldNprocesses(); i++ ){
         if (myrank==i){
             std::cout<< " Field rank " << myrank<<std::endl;
@@ -106,33 +109,22 @@ void test_communication(){
     }
 #endif
     int c2 = ff.copyHaloToBorderSelf<FACES>();
+    std::cout<< "After copyHaloToBorderSelf" <<std::endl;
     MPI_Barrier(MPIManager::getInstance().getFieldComm());
     for(int i = 0; i < MPIManager::getInstance().getFieldNprocesses(); i++ ){
         if (myrank==i){
             std::cout<< " Field rank " << myrank<<std::endl;
-            ff.printNoHalo();
+            //ff.printNoHalo();
             ff.printWithHalo();
         }
         MPI_Barrier(MPIManager::getInstance().getFieldComm());
     }
     MPI_Barrier(MPIManager::getInstance().getFieldComm());
     
-    /*
-    for(int k = 0; k<extentsWithHalo[2]; k++){
-        for(int j = 0; j<extentsWithHalo[1]; j++){
-            for(int i = 0; i<extentsWithHalo[0]; i++){
-                std::cout<< " Field rank " << myrank << " value " << ff(i,j,k) <<std::endl;
-                //if (ff(i,j,k) != myrank) {
-                //    std::cerr << "Assertion failed at ("<<i<<","<<j<<","<<k <<"): ff = "<< ff(i,j,k) <<", expected " << myrank << std::endl;
-                //    std::abort();
-                //}
-            }  
-        }
-    }
-    */
     
     std::cout<< " count copies " << c1 << " "<< c2 <<std::endl;
     MPI_Barrier(MPIManager::getInstance().getFieldComm());
+#if 0
     for(int k = halo[2]; k<(extentsWithHalo[2] - halo[2]); k++){
         for(int j = halo[1]; j<(extentsWithHalo[1] - halo[1]); j++){
             for(int i = halo[0]; i<(extentsWithHalo[0] - halo[0]); i++){
@@ -144,10 +136,24 @@ void test_communication(){
             }  
         }
     }
-#if 0
-    ff.mpiFillHaloCommunicateWaitAll<FACES+EDGES+CORNERS>();
-    ff.copyHaloToBorderSelf<FACES+EDGES+CORNERS>();
+#endif
+
+    ff.mpiFillHaloCommunicateWaitAll<FACES>();
+    ff.copyHaloToBorderSelf<FACES>();
+    std::cout<< "After copyHaloToBorderSelf 2 " <<std::endl;
     MPI_Barrier(MPIManager::getInstance().getFieldComm());
+    for(int k = halo[2]; k<(extentsWithHalo[2] - halo[2]); k++){
+        for(int j = halo[1]; j<(extentsWithHalo[1] - halo[1]); j++){
+            for(int i = halo[0]; i<(extentsWithHalo[0] - halo[0]); i++){
+                //std::cout<< " Field rank " << myrank << " value " << ff(i,j,k) <<std::endl;
+                if (ff(i,j,k) != ff.get1DFlatIndex(i,j,k) * 1) {
+                    std::cerr << "Assertion failed at ("<<i<<","<<j<<","<<k <<"): ff = "<< ff(i,j,k) <<", expected " << ff.get1DFlatIndex(i,j,k) * 1 << std::endl;
+                    std::abort();
+                }
+            }  
+        }
+    }
+#if 0
     for(int k = 0; k<extentsWithHalo[2]; k++){
         for(int j = 0; j<extentsWithHalo[1]; j++){
             for(int i = 0; i<extentsWithHalo[0]; i++){
@@ -175,7 +181,7 @@ int main(int argc, char **argv) {
     //auto& mpiInstance = MPIManager::getInstance();
     int dimensions[Dim] = {std::atoi(argv[1]),std::atoi(argv[2]),std::atoi(argv[3])};
     std::cout<< "MPI topology "<< dimensions[0] << ", " << dimensions[1]  << ", " << dimensions[2] <<std::endl;
-    bool periodic[Dim] = {1,0,0};
+    bool periodic[Dim] = {0,0,0};
     MPIManager::getInstance().initCartesianCommunicatorField(Dim,dimensions,periodic);
     /*
     try {
