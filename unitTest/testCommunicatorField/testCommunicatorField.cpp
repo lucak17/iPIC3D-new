@@ -82,8 +82,8 @@ void test_communication(){
             }  
         }
     }
-    ff.fillIndexNoHalo();
-    std::cout<< "After fillIndexNoHalo" <<std::endl;
+    ff.fillHostIndexNoHalo();
+    std::cout<< "After fillHostIndexNoHalo" <<std::endl;
     int c1 = 0;
     //c1 = ff.copyBorderToHaloSelf<FACES+EDGES+CORNERS>();
     for(int i = 0; i < MPIManager::getInstance().getFieldNprocesses(); i++ ){

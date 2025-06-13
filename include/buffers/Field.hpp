@@ -103,13 +103,13 @@ public:
   template<bool H = hostOnly, typename = std::enable_if_t<!H>>
   inline const T* getDeviceDataPtr() const noexcept { return this->buf_->getDeviceDataPtr(); }
   
-  template<bool H = hostOnly, typename = std::enable_if_t<!H>>
   void copyHostToDevice(cudaStream_t stream = 0) {
-    buf_->copyHostToDevice(stream);
+    if constexpr(hostOnly){}
+    else buf_->copyHostToDevice(stream);
   }
-  template<bool H = hostOnly, typename = std::enable_if_t<!H>>
-  void copyDeviceToHost(cudaStream_t stream=0) {
-    buf_->copyDeviceToHost(stream);
+  void copyDeviceToHost(cudaStream_t stream = 0) {
+    if constexpr(hostOnly){}
+    else buf_->copyDeviceToHost(stream);
   }
 
   uint size() const noexcept { return buf_->size(); }
@@ -141,30 +141,30 @@ public:
   }
 
   // fill host buffer with fixed value
-  void fillHostBufferWithHalo(T value){
+  inline void fillHostBufferWithHalo(T value){
     std::fill_n(this->getHostDataPtr(), totElementsWithHalo_, value);
   }
   
-  void fillHostBufferNoHalo(T value = static_cast<T>(1)) {
+  inline void fillHostBufferNoHalo(T value = static_cast<T>(1)) {
     std::array<int,Dim> idx{};
     ForEachField<Dim,Dim>::apply(
       startNoHalo_, endNoHalo_, [&](auto... I){ (*this->getHostBufferPtr())(I...) = value; }, idx );
   }
 
-  void fillIndexNoHalo(T value = static_cast<T>(1)) {
+  inline void fillHostIndexNoHalo(T value = static_cast<T>(1)) {
     std::array<int,Dim> idx{};
     ForEachField<Dim,Dim>::apply(
       startNoHalo_, endNoHalo_, [&](auto... I){ (*this->getHostBufferPtr())(I...) = this->get1DFlatIndex(I...) * value; }, idx );
   }
   
-  void fillIndexWithHalo(T value = static_cast<T>(1)) {
+  inline void fillHostIndexWithHalo(T value = static_cast<T>(1)) {
     std::array<int,Dim> idx{};
     ForEachField<Dim,Dim>::apply(
       startWithHalo_, endWithHalo_, [&](auto... I){ (*this->getHostBufferPtr())(I...) = this->get1DFlatIndex(I...) * value; }, idx );
   }
 
   template<uint D = Dim>
-  std::enable_if_t<D==3, void>
+  inline std::enable_if_t<D<4, void>
   printNoHalo() const {
     for(int k = halo_[2]; k < extentsNoHalo_[2]+halo_[2]; k++){
       for(int j = halo_[1]; j < extentsNoHalo_[1]+halo_[1]; j++){
@@ -178,7 +178,7 @@ public:
   }
 
   template<uint D = Dim>
-  std::enable_if_t<D==3, void>
+  inline std::enable_if_t<D<4, void>
   printWithHalo() const {
     for(int k = 0; k < extentsWithHalo_[2]; k++){
       for(int j = 0; j < extentsWithHalo_[1]; j++){
